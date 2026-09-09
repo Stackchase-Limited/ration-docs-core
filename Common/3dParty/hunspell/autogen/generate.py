@@ -7,7 +7,7 @@ curDirectory = os.path.dirname(os.path.realpath(__file__))
 dictionatiesDirectory = curDirectory + "/../../../../../dictionaries"
 
 all_dictionaties = {}
-for dir in glob.glob(dictionatiesDirectory + "/*"):
+for dir in sorted(glob.glob(dictionatiesDirectory + "/*")):
     if not os.path.isdir(dir):
         continue
     dictionaryName = os.path.basename(dir)

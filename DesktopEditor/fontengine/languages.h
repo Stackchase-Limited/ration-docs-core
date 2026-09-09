@@ -43,7 +43,7 @@ namespace NSTextLanguages
 		const char* m_name;
 	} DictionaryRec;
 
-	const int DictionaryRec_count = 49;
+	const int DictionaryRec_count = 52;
 	const DictionaryRec Dictionaries[DictionaryRec_count] =
 	{
 		{1068, "az_Latn_AZ"},
@@ -94,7 +94,10 @@ namespace NSTextLanguages
 		{2115, "uz_Cyrl_UZ"},
 		{1091, "uz_Latn_UZ"},
 		{1066, "vi_VN"},
-		{2067, "nl_NL"}
+		{2067, "nl_NL"},
+		{1130, "yo_NG"},
+		{1136, "ig_NG"},
+		{1128, "ha_Latn_NG"}
 	};
 }
 
