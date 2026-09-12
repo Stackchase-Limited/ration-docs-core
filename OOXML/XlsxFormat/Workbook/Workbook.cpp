@@ -808,6 +808,30 @@ xmlns:xr2=\"http://schemas.microsoft.com/office/spreadsheetml/2015/revision2\"\
 			}
 			return lActiveSheet;
 		}
+		// The editor carries the sheet the user is actually on in the save
+		// parameters, because activating a sheet is view state and never reaches
+		// the binary through the change stream - see
+		// ONLYOFFICE/DesktopEditors#1839. Overwrite the stored activeTab with it,
+		// so that both the CSV writer (which exports the active sheet and nothing
+		// else) and the workbook we write out agree with the editor.
+		void CWorkbook::SetActiveSheetIndex(LONG nIndex)
+		{
+			if (0 > nIndex)
+				return;
+
+			if (false == m_oBookViews.IsInit())
+				m_oBookViews.Init();
+
+			if (m_oBookViews->m_arrItems.empty())
+				m_oBookViews->m_arrItems.push_back(new OOX::Spreadsheet::CWorkbookView());
+
+			OOX::Spreadsheet::CWorkbookView* pWorkbookView = m_oBookViews->m_arrItems.front();
+
+			if (false == pWorkbookView->m_oActiveTab.IsInit())
+				pWorkbookView->m_oActiveTab.Init();
+
+			pWorkbookView->m_oActiveTab->SetValue(nIndex);
+		}
 
 		XLS::BaseObjectPtr CWorkbook::WriteXtiRefs() const
 		{

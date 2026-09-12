@@ -9690,6 +9690,9 @@ int BinaryFileReader::ReadFile(const std::wstring& sSrcFileName, std::wstring sD
 			_INT32 Lcid;
 
 			SerializeCommon::ReadFileType(sXMLOptions, fileType, nCodePage, sDelimiter, saveFileType, Lcid); //csv, tsc .. from XmlOptions !
+			// The sheet the editor was showing, or -1. ONLYOFFICE/DesktopEditors#1839.
+			_INT32 nActiveSheet = -1;
+			SerializeCommon::ReadActiveSheet(sXMLOptions, nActiveSheet);
 			// For CSV, override the path, otherwise a folder with the same name is created (for rels) and file is not created.
 
 			if (BinXlsxRW::c_oFileTypes::CSV == fileType)
@@ -9714,6 +9717,7 @@ int BinaryFileReader::ReadFile(const std::wstring& sSrcFileName, std::wstring sD
 			{
 				OOX::Spreadsheet::CXlsx oXlsx;
 				SaveParams oSaveParams(drawingsPath, embeddingsPath, themePath, pOfficeDrawingConverter->GetContentTypes(), NULL, bMacro);
+				oSaveParams.nActiveSheet = nActiveSheet;
 
 				try
 				{
@@ -9735,6 +9739,7 @@ int BinaryFileReader::ReadFile(const std::wstring& sSrcFileName, std::wstring sD
 				oXlsb.m_bWriteToXlsb = true;
 
 				SaveParams oSaveParams(drawingsPath, embeddingsPath, themePath, pOfficeDrawingConverter->GetContentTypes(), NULL, bMacro);
+				oSaveParams.nActiveSheet = nActiveSheet;
 
 				try
 				{
@@ -9768,6 +9773,7 @@ int BinaryFileReader::ReadFile(const std::wstring& sSrcFileName, std::wstring sD
 				if (!bResultOk) return AVS_FILEUTILS_ERROR_CONVERT;
 
 				SaveParams oSaveParams(drawingsPath, embeddingsPath, themePath, pOfficeDrawingConverter->GetContentTypes(), &oCSVWriter, false);
+				oSaveParams.nActiveSheet = nActiveSheet;
 				
 				try
 				{
@@ -9876,6 +9882,16 @@ int BinaryFileReader::ReadMainTable(OOX::Spreadsheet::CXlsx& oXlsx, NSBinPptxRW:
 			return res;
 		oSaveParams.bMacroEnabled = oXlsx.m_pWorkbook->m_bMacroEnabled;
 	}
+	// Sheet activation is view state: Workbook.prototype.setActive in sdkjs adds
+	// no History entry, so it never reaches this binary through the change
+	// stream and the activeTab stored here is the one from when the document was
+	// opened. The editor therefore ships the sheet it is actually showing in the
+	// save parameters; honour it before the worksheets are read, because that is
+	// when the CSV writer decides which single sheet to export.
+	// ONLYOFFICE/DesktopEditors#1839.
+	if (-1 != oSaveParams.nActiveSheet && NULL != oXlsx.m_pWorkbook)
+		oXlsx.m_pWorkbook->SetActiveSheetIndex(oSaveParams.nActiveSheet);
+
 	if (-1 != nPersonListOffBits)
 	{
 		oBufferedStream.Seek(nPersonListOffBits);

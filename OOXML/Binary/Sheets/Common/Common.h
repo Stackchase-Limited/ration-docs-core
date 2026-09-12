@@ -74,5 +74,9 @@ namespace SerializeCommon
 	};
 
     void ReadFileType(const std::wstring& sXMLOptions, BYTE& result, UINT& nCodePage, std::wstring& wcDelimiter, BYTE& saveFileType, _INT32& Lcid);
+    // fileOptions/@activeSheet - the sheet the editor was showing when the save
+    // was asked for. -1 when the option is absent, which is every conversion
+    // that does not come from a desktop save. ONLYOFFICE/DesktopEditors#1839.
+    void ReadActiveSheet(const std::wstring& sXMLOptions, _INT32& nActiveSheet);
 }
 

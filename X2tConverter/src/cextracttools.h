@@ -1026,6 +1026,40 @@ namespace NExtractTools
 
 			return sRes;
 		}
+		// The sheet the editor was showing when the save was asked for, as shipped
+		// by getAdditionalSaveParams() in sdkjs/cell/Local/api.js. -1 when absent.
+		// Sheet activation is view state and records no History entry, so it never
+		// reaches x2t through the change stream; without this the CSV writer
+		// exports whatever sheet was active when the document was *opened*.
+		// ONLYOFFICE/DesktopEditors#1839.
+		int getActiveSheetFromJsonParams()
+		{
+			if (NULL == m_sJsonParams)
+				return -1;
+
+			const std::wstring sKey = L"\"activeSheet\":";
+			std::wstring::size_type pos = m_sJsonParams->find(sKey);
+			if (std::wstring::npos == pos)
+				return -1;
+
+			pos += sKey.length();
+			const std::wstring::size_type nLen = m_sJsonParams->length();
+			while (pos < nLen && L' ' == (*m_sJsonParams)[pos])
+				++pos;
+
+			int nValue = 0;
+			std::wstring::size_type nDigits = 0;
+			// A sheet index cannot be long; refuse anything that is, rather than
+			// risk an overflow on a malformed parameter.
+			while (pos < nLen && nDigits < 9 && (*m_sJsonParams)[pos] >= L'0' && (*m_sJsonParams)[pos] <= L'9')
+			{
+				nValue = nValue * 10 + (int)((*m_sJsonParams)[pos] - L'0');
+				++pos;
+				++nDigits;
+			}
+
+			return 0 == nDigits ? -1 : nValue;
+		}
 		std::wstring getXmlOptionsTo()
 		{
 			std::wstring sRes;
@@ -1108,6 +1142,11 @@ namespace NExtractTools
 			if (LcId != -1)
 			{
 				sRes += L"' Lcid='" + std::to_wstring(LcId);
+			}
+			int nActiveSheet = getActiveSheetFromJsonParams();
+			if (nActiveSheet != -1)
+			{
+				sRes += L"' activeSheet='" + std::to_wstring(nActiveSheet);
 			}
 			sRes += L"' delimiter='" + XmlUtils::EncodeXmlStringExtend(cDelimiter) + L"' " + sSaveType;
 			sRes += L"/></xmlOptions>";

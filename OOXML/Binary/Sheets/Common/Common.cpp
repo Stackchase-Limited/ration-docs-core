@@ -177,6 +177,36 @@ namespace SerializeCommon
 
 		return;
 	}
+    void ReadActiveSheet(const std::wstring& sXMLOptions, _INT32& nActiveSheet)
+	{
+		nActiveSheet = -1; // default: no sheet was named, keep the stored activeTab
+
+		nullable<SimpleTypes::CDecimalNumber> activeSheet;
+
+		XmlUtils::CXmlLiteReader oReader;
+		if (true != oReader.FromString(sXMLOptions) || true != oReader.IsValid())
+			return;
+
+		oReader.ReadNextNode(); // XmlOptions
+		if (oReader.IsEmptyNode())
+			return;
+
+		int nCurDepth = oReader.GetDepth();
+		while (oReader.ReadNextSiblingNode(nCurDepth))
+		{
+			if (L"fileOptions" == oReader.GetName())
+			{
+				WritingElement_ReadAttributes_Start(oReader)
+					WritingElement_ReadAttributes_Read_if	(oReader, L"activeSheet", activeSheet)
+				WritingElement_ReadAttributes_End(oReader)
+
+				if (activeSheet.IsInit() && 0 <= activeSheet->GetValue())
+					nActiveSheet = activeSheet->GetValue();
+
+				return;
+			}
+		}
+	}
 
 	CommentData::CommentData()
 	{

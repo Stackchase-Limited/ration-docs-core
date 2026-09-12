@@ -111,6 +111,9 @@ namespace BinXlsxRW
 		OOX::CContentTypes*				pContentTypes = NULL;
 		CSVWriter*						pCSVWriter = NULL;
 		bool							bMacroEnabled = false;
+		// The sheet the editor was showing when the save was asked for, or -1.
+		// See SerializeCommon::ReadActiveSheet - ONLYOFFICE/DesktopEditors#1839.
+		_INT32							nActiveSheet = -1;
 	};
 
 	class BinaryChartReader : public Binary_CommonReader

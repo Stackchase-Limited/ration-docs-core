@@ -152,6 +152,7 @@ namespace OOX
 
 			void PrepareToWrite();
 			LONG GetActiveSheetIndex();
+			void SetActiveSheetIndex(LONG nIndex);
 			XLS::BaseObjectPtr WriteXtiRefs() const;
 			XLS::BaseObjectPtr WriteXtiRefsXLS() const;
 
