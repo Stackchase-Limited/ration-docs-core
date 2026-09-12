@@ -20,9 +20,38 @@ if not base.is_dir("emsdk"):
   base.cmd(command_prefix + "emsdk", ["activate", "latest"])
   os.chdir("../")
 
+def keep_objects(work_dir, pass_name):
+  """Dispose of a pass's object directory.
+
+  Normally the objects are throwaway and upstream deletes them. Set
+  KEEP_OBJECTS=1 to move them to ./o_<pass> instead, which is what lets a
+  build be re-linked with different linker settings - e.g. -s ENVIRONMENT=node
+  -s MODULARIZE=1, so the very same objects that go into the shipping
+  fonts.wasm can be loaded and asserted on outside a browser
+  (fork-fix-tests/issue-2155-canvas-wasm). last_build_<pass>.sh records the
+  commands that produced them; its object paths are then ./o_<pass>/...
+  """
+  if not os.environ.get("KEEP_OBJECTS"):
+    base.delete_dir(work_dir + "/o")
+    return
+  kept = work_dir + "/o_" + pass_name
+  base.delete_dir(kept)
+  os.rename(work_dir + "/o", kept)
+  base.print_info("kept objects in " + kept)
+  return
+
 def exec_wasm(data, work, compiler_flags, wasm):
   cur_dir = os.getcwd()
   os.chdir(work)
+
+  # Each pass starts from an empty object directory. The wasm pass and the
+  # asm.js pass compile the same sources with different flags into the same
+  # ./o tree and the per-file compile below is skipped when the .o already
+  # exists, so sharing objects between passes would silently link asm.js
+  # objects into the wasm module. Upstream got this right by deleting ./o
+  # after every pass; do it here instead so that deletion can be made
+  # optional (KEEP_OBJECTS below) without breaking the second pass.
+  common.clear_dir("./o")
 
   for include in data["include_path"]:
     compiler_flags.append("-I" + include)
@@ -98,6 +127,10 @@ def exec_wasm(data, work, compiler_flags, wasm):
 
   run_file.append(prefix_call + "emcc -o " + data["name"] + ".js " + arguments + libs)
   base.print_info("run " + ("wasm " if wasm else "asm ") + data["name"])
+  # keep a verbatim record of the commands this build ran, next to make.py:
+  # the only way to audit which flags and which source files produced a
+  # checked-in wasm, and what a re-link of the same objects has to match.
+  base.save_as_script(os.path.join(cur_dir, "last_build_" + ("wasm" if wasm else "asm") + ".sh"), run_file)
   base.run_as_bat(run_file)
 
   # finalize
@@ -145,7 +178,7 @@ for param in argv:
     else:
       base.cmd_in_dir(work_dir, "python", ["-c", json_data["run_before"]])
 
-  # remove previous version
+  # remove previous version (exec_wasm clears ./o per pass as well)
   common.clear_dir(work_dir + "/o")
   base.create_dir(work_dir + json_data["res_folder"])
 
@@ -154,7 +187,7 @@ for param in argv:
     flags = json_data["compiler_flags"][:]
     flags.append("-s WASM=1")
     exec_wasm(json_data, work_dir, flags, True)
-    base.delete_dir(work_dir + "/o")
+    keep_objects(work_dir, "wasm")
   if json_data["asm"]:
     flags = json_data["compiler_flags"][:]
     flags.append("-s WASM=0")
@@ -165,7 +198,7 @@ for param in argv:
     if "embed_mem_file" in json_data and (json_data["embed_mem_file"]):
       flags.append("--memory-init-file 0")
     exec_wasm(json_data, work_dir, flags, False)
-    base.delete_dir(work_dir + "/o")
+    keep_objects(work_dir, "asm")
   if json_data["run_after"]:
     base.print_info("after")
     if base.is_file(work_dir + json_data["run_after"]):
