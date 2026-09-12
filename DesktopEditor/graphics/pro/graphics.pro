@@ -60,6 +60,14 @@ core_windows {
 	LIBS += -lShell32
 }
 
+core_linux:graphics_dynamic_library {
+	# #2136: keep the bundled FreeType/harfbuzz/brotli symbols inside this library, so
+	# cairo and pango cannot bind their FT_* calls to our 2.10.4 copy and then fall
+	# through to the system FreeType for the colour-glyph API it does not have.
+	# See graphics.version for the full mechanism.
+	QMAKE_LFLAGS += -Wl,--version-script,$$PWD/graphics.version
+}
+
 HEADERS += ./../config.h
 
 GRAPHICS_AGG_PATH = $$PWD/../../agg-2.4

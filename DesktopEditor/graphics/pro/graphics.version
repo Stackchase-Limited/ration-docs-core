@@ -1,0 +1,39 @@
+/*
+ * Linker version script for libgraphics.so.  ONLYOFFICE/DesktopEditors#2136.
+ *
+ * libgraphics compiles FreeType 2.10.4 (freetype.pri), harfbuzz and brotli straight
+ * into itself, and nothing in the tree passes -fvisibility=hidden or a version script,
+ * so every FT_*, hb_* and Brotli* symbol was exported with default visibility.
+ *
+ * ELF resolves symbols through one process-wide scope in load order, and desktop-apps
+ * links -lgraphics ahead of the GTK stack. So the FT_* calls cairo and pango make while
+ * painting a file name bound to libgraphics' 2.10.4 copy - but only the ones it
+ * defines. The COLRv1 colour-glyph API arrived in FreeType 2.11 and is absent from
+ * 2.10.4, so an emoji's colour path fell through to the system FreeType 2.13, which
+ * then read a face laid out by 2.10.4. That is the segfault in #2136: emoji only, and
+ * only with a font installed that sends the name down the colour path, which is why a
+ * clean VM could not reproduce it.
+ *
+ * Marking these local keeps the bundled copies to ourselves. Calls from inside
+ * libgraphics still resolve normally - fontengine/ and agg-2.4/font_freetype are
+ * compiled into this same library and are the only callers in the tree - while
+ * cairo, pango and everything else in the process get the system FreeType they were
+ * built against.
+ *
+ * Deliberately a list of what to hide rather than a whitelist of what to export. The
+ * public surface here is large (NSFonts, Aggplus, asc*, the metafile and raster
+ * entry points) and enumerating it risks hiding something a caller needs, which would
+ * show up as a link or runtime failure elsewhere. Missing a third-party prefix in this
+ * list only leaves that prefix as exposed as it already was.
+ *
+ * Verify after building:  nm -D --defined-only libgraphics.so | grep -c ' T FT_'
+ * must print 0.
+ */
+{
+  local:
+    FT_*;
+    ft_*;
+    hb_*;
+    _hb_*;
+    Brotli*;
+};
