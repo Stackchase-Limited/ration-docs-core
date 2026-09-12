@@ -1,4 +1,4 @@
-#define DictionaryRec_count 68
+#define DictionaryRec_count 89
 typedef struct {
     const char* m_name;
     int         m_lang;
@@ -36,7 +36,27 @@ static const DictionaryRec Dictionaries[DictionaryRec_count] = {
     { "en_GB", 2057 },
     { "en_US", 1033 },
     { "en_ZA", 7177 },
+    { "es_ES", 1034 },
+    { "es_ES", 2058 },
     { "es_ES", 3082 },
+    { "es_ES", 4106 },
+    { "es_ES", 5130 },
+    { "es_ES", 6154 },
+    { "es_ES", 7178 },
+    { "es_ES", 8202 },
+    { "es_ES", 9226 },
+    { "es_ES", 10250 },
+    { "es_ES", 11274 },
+    { "es_ES", 12298 },
+    { "es_ES", 13322 },
+    { "es_ES", 14346 },
+    { "es_ES", 15370 },
+    { "es_ES", 16394 },
+    { "es_ES", 17418 },
+    { "es_ES", 18442 },
+    { "es_ES", 19466 },
+    { "es_ES", 20490 },
+    { "es_ES", 21514 },
     { "eu_ES", 1069 },
     { "fr_FR", 1036 },
     { "gl_ES", 1110 },
@@ -62,6 +82,7 @@ static const DictionaryRec Dictionaries[DictionaryRec_count] = {
     { "pt_PT", 2070 },
     { "ro_RO", 1048 },
     { "ru_RU", 1049 },
+    { "ru_RU", 2073 },
     { "sk_SK", 1051 },
     { "sl_SI", 1060 },
     { "sr_Cyrl_RS", 10266 },
