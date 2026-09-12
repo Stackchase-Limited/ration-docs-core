@@ -742,6 +742,20 @@ int CFontFile::SetCMapForCharCode(long lUnicode, int *pnCMapIndex)
 
 	int nCharIndex = 0;
 
+	// The loop below selects every charmap in turn, and only returns early -
+	// with the right one selected - when a Unicode charmap has the glyph.
+	// Otherwise it runs to the end and leaves whichever charmap came last
+	// selected, and that then decides how every *later* lookup on this face
+	// reads a code point: faces live as long as the process and harfbuzz
+	// resolves code points with FT_Get_Char_Index on the currently selected
+	// charmap (hb_ft_get_nominal_glyph). A Macintosh (1,0) charmap left behind
+	// that way turns U+00FC into the glyph for MacRoman 0xFC and U+00DF into
+	// the glyph for MacRoman 0xDF. So end on the charmap the glyph was actually
+	// found in - the one *pnCMapIndex names - or back on the one we were given.
+	// ONLYOFFICE/DesktopEditors#2155.
+	FT_CharMap pEntryCharMap = m_pFace->charmap;
+	FT_CharMap pFoundCharMap = NULL;
+
 	for ( int nIndex = 0; nIndex < m_pFace->num_charmaps; ++nIndex )
 	{
 		FT_CharMap pCharMap = m_pFace->charmaps[nIndex];
@@ -781,9 +795,14 @@ int CFontFile::SetCMapForCharCode(long lUnicode, int *pnCMapIndex)
 			if ( nCharIndex = FT_Get_Char_Index( m_pFace, lUnicode ) )
 			{
 				*pnCMapIndex = nIndex;
+				pFoundCharMap = pCharMap;
 			}
 		}
 	}
+
+	FT_CharMap pSelectCharMap = ( nCharIndex && pFoundCharMap ) ? pFoundCharMap : pEntryCharMap;
+	if ( pSelectCharMap && pSelectCharMap != m_pFace->charmap )
+		FT_Set_Charmap( m_pFace, pSelectCharMap );
 
 	return nCharIndex;
 }

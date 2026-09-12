@@ -53,9 +53,13 @@ hb_ft_get_index_by_unicode(FT_Face face, FT_ULong charcode)
   FT_UInt gindex = 0;
   FT_Int charmap_index = 0;
   FT_Encoding cur_encoding = FT_ENCODING_NONE;
+  FT_CharMap cur_charmap = NULL;
   bool is_symbol = false;
   if (face && face->charmap)
+  {
     cur_encoding = face->charmap->encoding;
+    cur_charmap = face->charmap;
+  }
 
   while (charmap_index < face->num_charmaps)
   {
@@ -70,7 +74,27 @@ hb_ft_get_index_by_unicode(FT_Face face, FT_ULong charcode)
         gindex = FT_Get_Char_Index(face, 0xF000);
 
       if (gindex)
+      {
+        /* Put the caller's charmap back before returning. A glyph index does
+         * not depend on the charmap, but the face is cached for the life of
+         * the process and hb_ft_get_nominal_glyph below resolves every
+         * *subsequent* code point with FT_Get_Char_Index on whatever charmap
+         * happens to be selected. Leaving a Macintosh (1,0) charmap behind
+         * makes it read Unicode code points as MacRoman bytes from then on:
+         * in Arial, U+00FC then yields the glyph for MacRoman 0xFC, which is
+         * the cedilla, and U+00DF the glyph for MacRoman 0xDF, which is the
+         * fl ligature - so Begruessung, spelt with u-umlaut and sharp s,
+         * renders as "Begr(cedilla)(fl)ung" and stays wrong until the
+         * process is restarted. ASCII is unaffected because MacRoman agrees
+         * with ASCII below 0x80, which is why the corruption looks so odd.
+         * A tab or a newline is enough to get here: Arial maps neither in
+         * its Unicode cmaps and both in its (1,0) cmap.
+         * ONLYOFFICE/DesktopEditors#2155. */
+        if (cur_charmap)
+          FT_Set_Charmap(face, cur_charmap);
+
         return gindex;
+      }
     }
 
     charmap_index++;

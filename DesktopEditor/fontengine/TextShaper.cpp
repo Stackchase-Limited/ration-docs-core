@@ -260,6 +260,20 @@ namespace NSShaper
 
 		unsigned int nCharIndex = 0;
 
+		// The loop below selects every charmap in turn, and only returns early -
+		// with the right one selected - when a Unicode charmap has the glyph.
+		// Otherwise it runs to the end and leaves whichever charmap came last
+		// selected, which then decides how every *later* lookup on this face
+		// reads a code point: faces are cached for the life of the process and
+		// harfbuzz resolves code points with FT_Get_Char_Index on the currently
+		// selected charmap (hb_ft_get_nominal_glyph). A Macintosh (1,0) charmap
+		// left behind that way turns U+00FC into the glyph for MacRoman 0xFC and
+		// U+00DF into the glyph for MacRoman 0xDF. So end on the charmap the
+		// glyph was actually found in, or back on the one we were given.
+		// ONLYOFFICE/DesktopEditors#2155.
+		FT_CharMap pEntryCharMap = face->charmap;
+		FT_CharMap pFoundCharMap = NULL;
+
 		for ( int nIndex = 0; nIndex < face->num_charmaps; ++nIndex )
 		{
 			FT_CharMap pCharMap = face->charmaps[nIndex];
@@ -276,6 +290,7 @@ namespace NSShaper
 				{
 					return nCharIndex;
 				}
+				pFoundCharMap = NULL;
 			}
 			else if ( FT_ENCODING_NONE == pEncoding || FT_ENCODING_MS_SYMBOL == pEncoding || FT_ENCODING_APPLE_ROMAN == pEncoding )
 			{
@@ -296,8 +311,13 @@ namespace NSShaper
 #endif
 
 				nCharIndex = FT_Get_Char_Index( face, unicode );
+				pFoundCharMap = nCharIndex ? pCharMap : NULL;
 			}
 		}
+
+		FT_CharMap pSelectCharMap = pFoundCharMap ? pFoundCharMap : pEntryCharMap;
+		if ( pSelectCharMap && pSelectCharMap != face->charmap )
+			FT_Set_Charmap( face, pSelectCharMap );
 
 		return nCharIndex;
 	}
