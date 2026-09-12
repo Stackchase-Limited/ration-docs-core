@@ -207,6 +207,60 @@ namespace SerializeCommon
 			}
 		}
 	}
+    void ReadTopLeftCells(const std::wstring& sXMLOptions, std::map<_INT32, std::wstring>& mapTopLeftCells)
+	{
+		mapTopLeftCells.clear();
+
+		nullable_string topLeftCells;
+
+		XmlUtils::CXmlLiteReader oReader;
+		if (true != oReader.FromString(sXMLOptions) || true != oReader.IsValid())
+			return;
+
+		oReader.ReadNextNode(); // XmlOptions
+		if (oReader.IsEmptyNode())
+			return;
+
+		int nCurDepth = oReader.GetDepth();
+		while (oReader.ReadNextSiblingNode(nCurDepth))
+		{
+			if (L"fileOptions" == oReader.GetName())
+			{
+				WritingElement_ReadAttributes_Start(oReader)
+					WritingElement_ReadAttributes_Read_if	(oReader, L"topLeftCells", topLeftCells)
+				WritingElement_ReadAttributes_End(oReader)
+
+				break;
+			}
+		}
+
+		if (false == topLeftCells.IsInit())
+			return;
+
+		// "<sheet index>:<A1-style ref>" pairs separated by ';', as built by
+		// InputParams::getTopLeftCellsFromJsonParams out of the save parameters.
+		const std::wstring& sValue = topLeftCells.get();
+		std::wstring::size_type nStart = 0;
+		while (nStart <= sValue.length())
+		{
+			std::wstring::size_type nEnd = sValue.find(L';', nStart);
+			if (std::wstring::npos == nEnd)
+				nEnd = sValue.length();
+
+			const std::wstring sPair = sValue.substr(nStart, nEnd - nStart);
+			nStart = nEnd + 1;
+
+			const std::wstring::size_type nColon = sPair.find(L':');
+			if (std::wstring::npos == nColon || 0 == nColon || nColon + 1 == sPair.length())
+				continue;
+
+			const std::wstring sIndex = sPair.substr(0, nColon);
+			if (sIndex.length() > 9 || sIndex.find_first_not_of(L"0123456789") != std::wstring::npos)
+				continue;
+
+			mapTopLeftCells[(_INT32)std::stoi(sIndex)] = sPair.substr(nColon + 1);
+		}
+	}
 
 	CommentData::CommentData()
 	{

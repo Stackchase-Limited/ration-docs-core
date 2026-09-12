@@ -1060,6 +1060,59 @@ namespace NExtractTools
 
 			return 0 == nDigits ? -1 : nValue;
 		}
+		// Where each sheet was scrolled to when the save was asked for, as shipped
+		// by getAdditionalSaveParams() in sdkjs/cell/Local/api.js: a string of
+		// "<sheet index>:<A1-style ref>" pairs separated by ';', e.g. "0:A1000;2:C5".
+		// Empty when the parameter is absent. Scrolling records no History entry
+		// either, so like the active sheet this cannot reach x2t through the change
+		// stream; without it a saved spreadsheet reopens scrolled to wherever it was
+		// when it was first opened. ONLYOFFICE/DesktopEditors#1868.
+		std::wstring getTopLeftCellsFromJsonParams()
+		{
+			if (NULL == m_sJsonParams)
+				return L"";
+
+			const std::wstring sKey = L"\"topLeftCells\":";
+			std::wstring::size_type pos = m_sJsonParams->find(sKey);
+			if (std::wstring::npos == pos)
+				return L"";
+
+			pos += sKey.length();
+			const std::wstring::size_type nLen = m_sJsonParams->length();
+			while (pos < nLen && L' ' == (*m_sJsonParams)[pos])
+				++pos;
+
+			if (pos >= nLen || L'"' != (*m_sJsonParams)[pos])
+				return L"";
+			++pos;
+
+			std::wstring sRes;
+			while (pos < nLen && L'"' != (*m_sJsonParams)[pos])
+			{
+				const wchar_t c = (*m_sJsonParams)[pos];
+				// Only what the format can contain, so the value goes into an
+				// xmlOptions attribute unescaped and a malformed parameter cannot
+				// inject markup. Anything else voids the whole value rather than
+				// being silently dropped, because a half-read pair list would scroll
+				// the wrong sheet.
+				const bool bOk = (c >= L'0' && c <= L'9') || (c >= L'A' && c <= L'Z') ||
+					(c >= L'a' && c <= L'z') || L':' == c || L';' == c || L'$' == c;
+				if (false == bOk)
+					return L"";
+
+				sRes += c;
+				++pos;
+
+				// A pair costs a dozen characters and no workbook has 100000 sheets.
+				if (sRes.length() > 4096)
+					return L"";
+			}
+			// An unterminated string is malformed.
+			if (pos >= nLen)
+				return L"";
+
+			return sRes;
+		}
 		std::wstring getXmlOptionsTo()
 		{
 			std::wstring sRes;
@@ -1147,6 +1200,11 @@ namespace NExtractTools
 			if (nActiveSheet != -1)
 			{
 				sRes += L"' activeSheet='" + std::to_wstring(nActiveSheet);
+			}
+			std::wstring sTopLeftCells = getTopLeftCellsFromJsonParams();
+			if (false == sTopLeftCells.empty())
+			{
+				sRes += L"' topLeftCells='" + sTopLeftCells;
 			}
 			sRes += L"' delimiter='" + XmlUtils::EncodeXmlStringExtend(cDelimiter) + L"' " + sSaveType;
 			sRes += L"/></xmlOptions>";

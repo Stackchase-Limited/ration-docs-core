@@ -370,6 +370,10 @@ namespace BinXlsxRW
 		int ReadProtectedRanges(BYTE type, long length, void* poResult);
 		int ReadProtectedRange(BYTE type, long length, void* poResult);
 		int ReadSheetViews(BYTE type, long length, void* poResult);
+		// Overwrite the sheetView's topLeftCell with the scroll position the editor
+		// shipped for this worksheet, if it shipped one.
+		// ONLYOFFICE/DesktopEditors#1868.
+		void ApplyTopLeftCellOverride(OOX::Spreadsheet::CSheetView* pSheetView);
 		int ReadSheetView(BYTE type, long length, void* poResult);
 		int ReadPane(BYTE type, long length, void* poResult);
 		int ReadSelection(BYTE type, long length, void* poResult);

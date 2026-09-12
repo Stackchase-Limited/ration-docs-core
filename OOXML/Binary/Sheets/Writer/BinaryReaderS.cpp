@@ -4457,6 +4457,7 @@ int BinaryWorksheetsTableReader::ReadWorksheet(boost::unordered_map<BYTE, std::v
 		pSheetView->m_oWorkbookViewId.Init();
 		pSheetView->m_oWorkbookViewId->SetValue(0);
 	}
+	ApplyTopLeftCellOverride(pSheetView); // ONLYOFFICE/DesktopEditors#1868
 	m_pCurWorksheet->m_oSheetViews->toXML(oStreamWriter);
 //-------------------------------------------------------------------------------------------------------------
 	OOX::Spreadsheet::CSheetFormatPr oSheetFormatPr;
@@ -4901,6 +4902,7 @@ int BinaryWorksheetsTableReader::ReadWorksheet(boost::unordered_map<BYTE, std::v
         pSheetView->m_oWorkbookViewId.Init();
         pSheetView->m_oWorkbookViewId->SetValue(0);
     }
+    ApplyTopLeftCellOverride(pSheetView); // ONLYOFFICE/DesktopEditors#1868
     m_pCurWorksheet->m_oSheetViews->toBin(oStreamWriter);
 //-------------------------------------------------------------------------------------------------------------
     OOX::Spreadsheet::CSheetFormatPr oSheetFormatPr;
@@ -5509,6 +5511,49 @@ int BinaryWorksheetsTableReader::ReadProtectedRange(BYTE type, long length, void
 	else
 		res = c_oSerConstants::ReadUnknown;
 	return res;
+}
+
+// Where inside a sheet the user is looking is view state, and unlike the active
+// sheet nothing in sdkjs even tries to record it: WorksheetView's two calls to
+// model.updateTopLeftCell are commented out, so scrolling never reaches
+// Worksheet.sheetViews[0].topLeftCell, and the one path that does copy the live
+// position into the model - WorkbookView.executeWithCurrentTopLeftCell - runs
+// only around a full-binary write, which a desktop save does not do. A desktop
+// save ships *changes*, which are applied to the Editor.bin written at open
+// time, so the topLeftCell in this binary is the one from when the document was
+// opened - and the file we write from it reopens scrolled there, in practice A1,
+// instead of where the user left off. The editor therefore ships the live
+// top-left cell of every sheet it has a view for in the save parameters; apply it
+// while this worksheet's sheetViews are still being written out.
+// ONLYOFFICE/DesktopEditors#1868.
+void BinaryWorksheetsTableReader::ApplyTopLeftCellOverride(OOX::Spreadsheet::CSheetView* pSheetView)
+{
+	if (NULL == pSheetView || m_oSaveParams.mapTopLeftCells.empty())
+		return;
+
+	// The index the current worksheet will get: it is pushed into m_arWorksheets
+	// only after it has been read, which is the same identity the CSV writer uses
+	// to recognise the active sheet.
+	std::map<_INT32, std::wstring>::const_iterator pFindTopLeft =
+		m_oSaveParams.mapTopLeftCells.find((_INT32)m_arWorksheets.size());
+
+	if (m_oSaveParams.mapTopLeftCells.end() == pFindTopLeft)
+		return;
+
+	if (L"A1" == pFindTopLeft->second)
+	{
+		// A1 is the default and sdkjs stores no topLeftCell for it - see
+		// Worksheet.prototype.generateTopLeftCellFromRange, which returns null both
+		// at the origin and for the frozen-pane case it cannot express, and
+		// executeWithCurrentTopLeftCell, which stores exactly that before a
+		// full-binary write. Clearing rather than writing "A1" keeps this path
+		// byte-identical to that one, and still resets a stale stored position.
+		pSheetView->m_oTopLeftCell.reset();
+	}
+	else
+	{
+		pSheetView->m_oTopLeftCell = pFindTopLeft->second;
+	}
 }
 
 int BinaryWorksheetsTableReader::ReadSheetViews(BYTE type, long length, void* poResult)
@@ -9693,6 +9738,10 @@ int BinaryFileReader::ReadFile(const std::wstring& sSrcFileName, std::wstring sD
 			// The sheet the editor was showing, or -1. ONLYOFFICE/DesktopEditors#1839.
 			_INT32 nActiveSheet = -1;
 			SerializeCommon::ReadActiveSheet(sXMLOptions, nActiveSheet);
+			// Where each sheet was scrolled to, keyed by sheet index; empty when the
+			// editor sent nothing. ONLYOFFICE/DesktopEditors#1868.
+			std::map<_INT32, std::wstring> mapTopLeftCells;
+			SerializeCommon::ReadTopLeftCells(sXMLOptions, mapTopLeftCells);
 			// For CSV, override the path, otherwise a folder with the same name is created (for rels) and file is not created.
 
 			if (BinXlsxRW::c_oFileTypes::CSV == fileType)
@@ -9718,6 +9767,7 @@ int BinaryFileReader::ReadFile(const std::wstring& sSrcFileName, std::wstring sD
 				OOX::Spreadsheet::CXlsx oXlsx;
 				SaveParams oSaveParams(drawingsPath, embeddingsPath, themePath, pOfficeDrawingConverter->GetContentTypes(), NULL, bMacro);
 				oSaveParams.nActiveSheet = nActiveSheet;
+				oSaveParams.mapTopLeftCells = mapTopLeftCells;
 
 				try
 				{
@@ -9740,6 +9790,7 @@ int BinaryFileReader::ReadFile(const std::wstring& sSrcFileName, std::wstring sD
 
 				SaveParams oSaveParams(drawingsPath, embeddingsPath, themePath, pOfficeDrawingConverter->GetContentTypes(), NULL, bMacro);
 				oSaveParams.nActiveSheet = nActiveSheet;
+				oSaveParams.mapTopLeftCells = mapTopLeftCells;
 
 				try
 				{
@@ -9774,6 +9825,7 @@ int BinaryFileReader::ReadFile(const std::wstring& sSrcFileName, std::wstring sD
 
 				SaveParams oSaveParams(drawingsPath, embeddingsPath, themePath, pOfficeDrawingConverter->GetContentTypes(), &oCSVWriter, false);
 				oSaveParams.nActiveSheet = nActiveSheet;
+				oSaveParams.mapTopLeftCells = mapTopLeftCells;
 				
 				try
 				{

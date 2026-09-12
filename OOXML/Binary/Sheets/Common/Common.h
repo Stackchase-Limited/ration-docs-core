@@ -41,6 +41,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 
 #define BUFFER_GROW_SIZE 1 * 1024 * 1024 //1mb
 
@@ -78,5 +79,10 @@ namespace SerializeCommon
     // was asked for. -1 when the option is absent, which is every conversion
     // that does not come from a desktop save. ONLYOFFICE/DesktopEditors#1839.
     void ReadActiveSheet(const std::wstring& sXMLOptions, _INT32& nActiveSheet);
+    // fileOptions/@topLeftCells - where each sheet was scrolled to when the save
+    // was asked for, keyed by sheet index. Left empty when the option is absent,
+    // which is every conversion that does not come from a desktop save.
+    // ONLYOFFICE/DesktopEditors#1868.
+    void ReadTopLeftCells(const std::wstring& sXMLOptions, std::map<_INT32, std::wstring>& mapTopLeftCells);
 }
 

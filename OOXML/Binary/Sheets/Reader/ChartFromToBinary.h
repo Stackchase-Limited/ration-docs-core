@@ -40,6 +40,8 @@
 #include "../../../PPTXFormat/DrawingConverter/ASCOfficeDrawingConverter.h"
 #include "../../Sheets/Writer/CSVWriter.h"
 
+#include <map>
+
 namespace OOX
 {
 	namespace Spreadsheet
@@ -114,6 +116,10 @@ namespace BinXlsxRW
 		// The sheet the editor was showing when the save was asked for, or -1.
 		// See SerializeCommon::ReadActiveSheet - ONLYOFFICE/DesktopEditors#1839.
 		_INT32							nActiveSheet = -1;
+		// Where each sheet was scrolled to when the save was asked for, keyed by
+		// sheet index; empty when the editor sent nothing.
+		// See SerializeCommon::ReadTopLeftCells - ONLYOFFICE/DesktopEditors#1868.
+		std::map<_INT32, std::wstring>	mapTopLeftCells;
 	};
 
 	class BinaryChartReader : public Binary_CommonReader
