@@ -1974,8 +1974,45 @@ namespace NSFonts
 		if (pFace->family_name && (0 == strcmp(pFace->family_name, "ASCW3")))
 			bIsASC = true;
 
+		/* The codes this records are treated as Unicode by the font-selection database,
+		   so only a charmap that really is Unicode may be walked. A legacy subtable holds
+		   codes in its own encoding, and recording those as Unicode makes a font claim
+		   coverage of whatever range those bytes happen to land in.
+
+		   macOS's STHeiti Light.ttc is the case in ONLYOFFICE/DesktopEditors#2433: its
+		   subtables are (0,4) Unicode, (1,0) Mac Roman and (1,2) Mac Traditional Chinese,
+		   the last of which is Big5. FreeType reports platform 1 / encoding 2 as
+		   FT_ENCODING_NONE - only Mac Roman becomes FT_ENCODING_APPLE_ROMAN, see
+		   sfnt_find_encoding - so its Big5 codes were recorded verbatim and Heiti TC/SC
+		   ended up claiming U+A140-U+F9FE, which overlaps the Hangul Syllables block. Heiti
+		   then won the fallback for Korean text, and every syllable whose code point is
+		   also a valid Big5 code came out as an unrelated ideograph.
+
+		   MS Symbol stays: that is how a symbol font expresses its coverage, in the
+		   U+F000 range the rest of the engine already expects.
+
+		   A font with no Unicode subtable at all is left alone. For those the legacy
+		   subtable is the only description of coverage there is, and dropping it would
+		   lose the font entirely rather than merely mis-rank it. */
+		bool bHasUnicodeCharMap = false;
 		for (int nCharMap = 0; nCharMap < pFace->num_charmaps; nCharMap++)
 		{
+			if (FT_ENCODING_UNICODE == pFace->charmaps[nCharMap]->encoding)
+			{
+				bHasUnicodeCharMap = true;
+				break;
+			}
+		}
+
+		for (int nCharMap = 0; nCharMap < pFace->num_charmaps; nCharMap++)
+		{
+			if (bHasUnicodeCharMap)
+			{
+				FT_Encoding eEncoding = pFace->charmaps[nCharMap]->encoding;
+				if (FT_ENCODING_UNICODE != eEncoding && FT_ENCODING_MS_SYMBOL != eEncoding)
+					continue;
+			}
+
 			FT_Set_Charmap(pFace, pFace->charmaps[nCharMap]);
 
 			FT_UInt indexG;
