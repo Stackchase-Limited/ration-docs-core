@@ -756,6 +756,31 @@ int CFontFile::SetCMapForCharCode(long lUnicode, int *pnCMapIndex)
 	FT_CharMap pEntryCharMap = m_pFace->charmap;
 	FT_CharMap pFoundCharMap = NULL;
 
+	/* A legacy subtable holds codes in its own encoding, so asking it for a Unicode code
+	   point returns whatever glyph that number happens to name there - not the character
+	   asked for. macOS's STHeiti carries a Mac Traditional Chinese (Big5) subtable, and
+	   Big5 0xD14C, 0xC2A4 and 0xD2B8 are 埕, 瞻 and 珚, which is exactly what Korean
+	   테스트 rendered as in ONLYOFFICE/DesktopEditors#2433.
+
+	   If the face has a Unicode subtable and that subtable does not have the character,
+	   the font genuinely does not map it from Unicode; a hit in a legacy subtable is a
+	   numeric coincidence rather than a better answer, so do not look. A face with no
+	   Unicode subtable is a different matter - there the legacy subtable is the only
+	   mapping there is, and it is still consulted exactly as before.
+
+	   MS Symbol is not gated. It is a Unicode convention rather than a legacy encoding -
+	   symbol fonts map the U+F000 private use area, which is what the rest of the engine
+	   passes in and what FreeType's symbol handling expects. */
+	bool bHasUnicodeCharMap = false;
+	for ( int nIndex = 0; nIndex < m_pFace->num_charmaps; ++nIndex )
+	{
+		if ( FT_ENCODING_UNICODE == m_pFace->charmaps[nIndex]->encoding )
+		{
+			bHasUnicodeCharMap = true;
+			break;
+		}
+	}
+
 	for ( int nIndex = 0; nIndex < m_pFace->num_charmaps; ++nIndex )
 	{
 		FT_CharMap pCharMap = m_pFace->charmaps[nIndex];
@@ -773,7 +798,8 @@ int CFontFile::SetCMapForCharCode(long lUnicode, int *pnCMapIndex)
 				return nCharIndex;
 			}
 		}
-		else if ( FT_ENCODING_NONE == pEncoding || FT_ENCODING_MS_SYMBOL == pEncoding || FT_ENCODING_APPLE_ROMAN == pEncoding )
+		else if ( FT_ENCODING_MS_SYMBOL == pEncoding ||
+				  ( !bHasUnicodeCharMap && ( FT_ENCODING_NONE == pEncoding || FT_ENCODING_APPLE_ROMAN == pEncoding ) ) )
 		{
 #if 0
 			FT_ULong  charcode;
