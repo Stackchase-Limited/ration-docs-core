@@ -818,8 +818,14 @@ int CFontFile::SetCMapForCharCode(long lUnicode, int *pnCMapIndex)
 			}
 #endif
 
-			if ( nCharIndex = FT_Get_Char_Index( m_pFace, lUnicode ) )
+			/* Assigning nCharIndex from inside the condition means a later charmap that
+			   does *not* have the character overwrites the hit an earlier one found, and
+			   the lookup returns 0 for a character the face can actually draw. Only commit
+			   a result when there is one. */
+			FT_UInt nFoundIndex = FT_Get_Char_Index( m_pFace, lUnicode );
+			if ( nFoundIndex )
 			{
+				nCharIndex = (int)nFoundIndex;
 				*pnCMapIndex = nIndex;
 				pFoundCharMap = pCharMap;
 			}
