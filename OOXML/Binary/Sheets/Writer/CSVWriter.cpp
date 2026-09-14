@@ -334,10 +334,24 @@ std::wstring CSVWriter::Impl::convert_date_time(const std::wstring & sValue, std
 		boost::posix_time::time_duration day(24, 0, 0);
 		double millisec = day.total_milliseconds() * dTime;
 
-		double sec = millisec / 1000.;
-		int hours = (int)(sec / 60. / 60.);
-		int minutes = (int)((sec - (hours * 60 * 60)) / 60.);
-		sec = sec - (hours * 60 + minutes) * 60.;
+		/* #2280: 11:50:12 came out of here as 11:50:11. A time of day is a fraction of
+		   a double, so 11:50:12 is stored as 11:50:11.999999..., and the seconds were
+		   truncated by a cast rather than rounded - losing a second on roughly half of
+		   all times. Round once to the nearest second and decompose with integers, so
+		   the three parts cannot disagree with each other either. This writer has no
+		   fractional-second format, so nothing is given up by rounding here. */
+		double dTotalSeconds = millisec / 1000.;
+		long long llSeconds = (long long)(dTotalSeconds + 0.5);
+
+		/* Rounding up from 23:59:59.5 would give 24:00:00, which is really midnight on
+		   the following day - but the date was already taken from the integer part
+		   above and is not ours to advance here. A second early beats a day wrong. */
+		if (llSeconds > 86399)
+			llSeconds = 86399;
+
+		int hours = (int)(llSeconds / 3600);
+		int minutes = (int)((llSeconds % 3600) / 60);
+		double sec = (double)(llSeconds % 60);
 
 		if (format_code.empty())
 		{
@@ -465,12 +479,19 @@ std::wstring CSVWriter::Impl::convert_date_time(const std::wstring & sValue, std
 			if (std::wstring::npos != format_code.find(L"AM/PM"))
 			{
 				XmlUtils::replace_all(format_code, L"AM/PM", L"a");
-				if (hours > 12)
-				{
-					hours -= 12;
-					sAferTime += L"PM";
-				}
-				else sAferTime += L"AM";
+
+				/* #2280: this used to read `if (hours > 12)`, which gets noon and
+				   midnight wrong and nothing else - 12:48 PM was written as 12:48 AM,
+				   and 00:48 as "0:48 AM" rather than "12:48 AM".
+
+				   The two decisions are separate and must be made in this order: the
+				   meridiem comes from the original 24-hour value, and only then is the
+				   hour folded into the 1-12 range, where zero means twelve. */
+				sAferTime += (hours < 12) ? L"AM" : L"PM";
+
+				hours = hours % 12;
+				if (0 == hours)
+					hours = 12;
 			}
 
 			bool bHourOutput = false;// for month or minutes

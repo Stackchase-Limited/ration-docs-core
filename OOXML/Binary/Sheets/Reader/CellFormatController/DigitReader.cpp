@@ -43,10 +43,34 @@
 const std::wstring DefaultPercentFormat = L"0.0%";
 const auto NonDigitcellLimit = 1000;
 
+/* #2301: wcstod accepts C99 hexadecimal floating literals, so it reads "0x1A" as 26,
+   "0XFF" as 255 and "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb" as 4.15e46 - consuming
+   all 41 characters and reporting a clean parse. A CSV column of wallet addresses,
+   commit hashes or colour codes was therefore imported as numbers and the text thrown
+   away; the reporter saw the result as -9.22337E+18, the saturated integer.
+
+   Excel treats 0x... as text, and so should we. No decimal number contains an 'x', so
+   refusing this prefix cannot turn a real number into text. */
+static bool IsHexLiteral(const std::wstring &value)
+{
+	size_t i = 0;
+	while (i < value.length() && (value[i] == L' ' || value[i] == L'\t'))
+		++i;
+	if (i < value.length() && (value[i] == L'+' || value[i] == L'-'))
+		++i;
+	return (i + 1 < value.length()
+		&& value[i] == L'0'
+		&& (value[i + 1] == L'x' || value[i + 1] == L'X'));
+}
+
 bool DigitReader::ReadDigit(const std::wstring &value, std::wstring &digit, std::wstring &format)
 {
     size_t length = value.length();
     wchar_t *pEndPtr;
+
+	if (IsHexLiteral(value))
+		return false;
+
 	double dValue = wcstod(value.c_str(), &pEndPtr);
 
 
