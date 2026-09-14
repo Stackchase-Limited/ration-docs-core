@@ -2161,8 +2161,13 @@ namespace NSBinPptxRW
 		_INT32 sz = (_INT32)GetULong();
 		if (m_lPos + sz > m_lSize)
 		{
-			//todo - refactor
-			throwReadOutOfRange("GetRecordSize", m_lPos, m_lSize);
+			/* The record length just read from the stream runs past the end of the
+			   buffer, which means this position did not hold a length at all and the
+			   reader has lost sync. Report the length too - it is the value that says
+			   so, and without it the position and size alone look survivable. */
+			std::stringstream ss;
+			ss << "GetRecordSize (record length " << sz << ")";
+			throwReadOutOfRange(ss.str().c_str(), m_lPos, m_lSize);
 		}
 		return sz;
 	}
