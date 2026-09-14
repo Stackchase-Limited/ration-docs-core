@@ -1811,17 +1811,51 @@ std::vector<std::wstring> CApplicationFonts::GetSetupFontFiles(const bool& bIsUs
 
 	if (true)
 	{
-		std::vector<std::wstring> oArray2 = NSDirectory::GetFiles(L"C:\\Windows\\Fonts", true);
+		/* Ask Windows where these directories are instead of assembling them.
+		   sWinFontDir was already read from CSIDL_FONTS at the top of this function and
+		   was then ignored in favour of a hardcoded C:\Windows\Fonts, which is wrong on
+		   any machine whose system drive is not C:.
+
+		   The per-user path was worse: it concatenated the *account name* into
+		   C:\Users\<name>\AppData\Local. A profile directory is frequently not named
+		   after the account - a Microsoft account login derives it from the first part of
+		   the email address, a renamed account keeps its original folder, a domain
+		   account can be <name>.<DOMAIN>, and a redirected profile is not under C:\Users
+		   at all. When the guess misses, the directory is simply not scanned and the fonts
+		   in it do not exist as far as the editor is concerned.
+
+		   That directory is exactly where Microsoft Store fonts install, which is
+		   ONLYOFFICE/DesktopEditors#1954: a font visible in Windows Settings and usable in
+		   other applications is absent from our list. CSIDL_LOCAL_APPDATA gives the real
+		   path for the user actually running the process.  */
+		std::wstring sSystemFontDir = sWinFontDir.empty() ? std::wstring(L"C:\\Windows\\Fonts") : sWinFontDir;
+		std::vector<std::wstring> oArray2 = NSDirectory::GetFiles(sSystemFontDir, true);
 
 		if (bIsUseUserFonts)
 		{
-			wchar_t sUserName[1000];
-			DWORD nUserNameLen = 1000 + 1;
-			GetUserNameW(sUserName, &nUserNameLen);
-			std::wstring strUserName(sUserName, nUserNameLen - 1);
+			wchar_t wsLocalAppData[MAX_PATH];
+			wsLocalAppData[0] = (wchar_t)'\0';
 
-			NSDirectory::GetFiles2(L"C:\\Users\\" + strUserName + L"\\AppData\\Local\\Microsoft\\Windows\\Fonts", oArray2, false);
-			NSDirectory::GetFiles2(L"C:\\Users\\" + strUserName + L"\\AppData\\Local\\Microsoft\\FontCache\\4\\CloudFonts", oArray2, true);
+			std::wstring sLocalAppData;
+			if (SHGetSpecialFolderPathW(NULL, wsLocalAppData, CSIDL_LOCAL_APPDATA, FALSE))
+			{
+				sLocalAppData = std::wstring(wsLocalAppData);
+			}
+			else
+			{
+				// last resort, and the old behaviour: guess from the account name
+				wchar_t sUserName[1000];
+				DWORD nUserNameLen = 1000 + 1;
+				GetUserNameW(sUserName, &nUserNameLen);
+				std::wstring strUserName(sUserName, nUserNameLen - 1);
+				sLocalAppData = L"C:\\Users\\" + strUserName + L"\\AppData\\Local";
+			}
+
+			if (!sLocalAppData.empty())
+			{
+				NSDirectory::GetFiles2(sLocalAppData + L"\\Microsoft\\Windows\\Fonts", oArray2, false);
+				NSDirectory::GetFiles2(sLocalAppData + L"\\Microsoft\\FontCache\\4\\CloudFonts", oArray2, true);
+			}
 		}
 
 		for (std::vector<std::wstring>::iterator i = oArray2.begin(); i != oArray2.end(); i++)
