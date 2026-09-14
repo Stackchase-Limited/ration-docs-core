@@ -33,6 +33,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 #include "BinaryFileReaderWriter.h"
+
+#include <stdexcept>
+#include <sstream>
 #include "BinReaderWriterDefines.h"
 
 #include "../../Base/Nullable.h"
@@ -1975,6 +1978,31 @@ namespace NSBinPptxRW
 		return m_lNextId;
 	}
 
+	/* #2430: every bounds check in CBinaryFileReader below used to execute a bare
+	   `throw;`. A bare throw rethrows the exception currently being handled, and these
+	   are not reached from inside a handler - there is no current exception - so the
+	   only thing they could ever do was call std::terminate and kill the process. They
+	   read as "give up on this read", and never behaved that way.
+
+	   The visible cost was #2430: an .xlsm holding a Form Control checkbox aborted x2t
+	   while saving, and the editor reported "This file cannot be saved or created" -
+	   the user's edits could not be written at all. It is a whole class, not one file:
+	   any binary that sends this reader past the end of its buffer took the process
+	   with it, with no message and no conversion error.
+
+	   Throwing a real exception can only be an improvement. Where a caller has a
+	   handler - and the binary readers do, catch(...) around the parts they can do
+	   without - the conversion now continues or fails cleanly. Where there is no
+	   handler the result is the same terminate as before, except that it names the
+	   type and says what happened instead of dying silently. */
+	static void throwReadOutOfRange(const char* sFunction, LONG lPos, LONG lSize)
+	{
+		std::stringstream ss;
+		ss << "CBinaryFileReader::" << sFunction << ": read outside the buffer (pos "
+		   << lPos << ", size " << lSize << ")";
+		throw std::out_of_range(ss.str());
+	}
+
 	int CBinaryFileReader::Seek(LONG _pos)
 	{
 		if (_pos > m_lSize)
@@ -1984,7 +2012,7 @@ namespace NSBinPptxRW
 		if (_pos < 0 )
 		{
 			_pos = 0;
-			throw;
+			throwReadOutOfRange("Seek", m_lPos, m_lSize);
 		}
 		m_lPos = _pos;
 		m_pDataCur = m_pData + m_lPos;
@@ -2018,7 +2046,7 @@ namespace NSBinPptxRW
 	{
 		if (m_lPos >= m_lSize || m_lPos < 0)
 		{
-			throw;
+			throwReadOutOfRange("GetUChar", m_lPos, m_lSize);
 		}
 
 		BYTE res = *m_pDataCur;
@@ -2030,7 +2058,7 @@ namespace NSBinPptxRW
 	{
 		if (m_lPos >= m_lSize || m_lPos <0)
 		{
-			throw;
+			throwReadOutOfRange("GetChar", m_lPos, m_lSize);
 		}
 
 		BYTE res = *m_pDataCur;
@@ -2063,7 +2091,7 @@ namespace NSBinPptxRW
 	{
 		if (m_lPos + 1 >= m_lSize)
 		{
-			throw;
+			throwReadOutOfRange("GetUShort", m_lPos, m_lSize);
 		}
 #if defined(_IOS) || defined(__ANDROID__)
         _UINT16 res = 0;
@@ -2079,7 +2107,7 @@ namespace NSBinPptxRW
 	{
 		if (m_lPos + 1 >= m_lSize)
 		{
-			throw;
+			throwReadOutOfRange("GetShort", m_lPos, m_lSize);
 		}
 
 #if defined(_IOS) || defined(__ANDROID__)
@@ -2098,7 +2126,7 @@ namespace NSBinPptxRW
 	{
 		if (m_lPos + 3 >= m_lSize)
 		{
-			throw;
+			throwReadOutOfRange("GetULong", m_lPos, m_lSize);
 		}
 
 #if defined(_IOS) || defined(__ANDROID__)
@@ -2115,7 +2143,7 @@ namespace NSBinPptxRW
 	{
 		if (m_lPos + 7 >= m_lSize)
 		{
-			throw;
+			throwReadOutOfRange("GetLong64", m_lPos, m_lSize);
 		}
 
 #if defined(_IOS) || defined(__ANDROID__)
@@ -2134,7 +2162,7 @@ namespace NSBinPptxRW
 		if (m_lPos + sz > m_lSize)
 		{
 			//todo - refactor
-			throw;
+			throwReadOutOfRange("GetRecordSize", m_lPos, m_lSize);
 		}
 		return sz;
 	}
@@ -2151,7 +2179,7 @@ namespace NSBinPptxRW
 	{
         if (m_lPos + (int)DOUBLE_SIZEOF > m_lSize)
 		{
-			throw;
+			throwReadOutOfRange("GetDoubleReal", m_lPos, m_lSize);
 		}
 
 #if defined(_IOS) || defined(__ANDROID__)
@@ -2177,7 +2205,7 @@ namespace NSBinPptxRW
             return "";
         if (m_lPos + len > m_lSize)
 		{
-			throw;
+			throwReadOutOfRange("GetString1", m_lPos, m_lSize);
 		}
 
 		std::string res((CHAR*)m_pDataCur, len);
@@ -2197,7 +2225,7 @@ namespace NSBinPptxRW
 
 		if (m_lPos + len > m_lSize)
 		{
-			throw;
+			throwReadOutOfRange("GetStringUtf8", m_lPos, m_lSize);
 		}
 
 		std::wstring res = NSFile::CUtf8Converter::GetUnicodeStringFromUTF8(m_pDataCur, len);
@@ -2214,7 +2242,7 @@ namespace NSBinPptxRW
         
 		if (m_lPos + len > m_lSize)
 		{
-			throw;
+			throwReadOutOfRange("GetString3", m_lPos, m_lSize);
 		}
 
         int lSize = len >> 1; //string in char
@@ -2257,7 +2285,7 @@ namespace NSBinPptxRW
 			return L"";
 		if (m_lPos + len > m_lSize)
 		{
-			throw;
+			throwReadOutOfRange("GetString4", m_lPos, m_lSize);
 		}
 
 		_UINT32 lSize = len >> 1; //string in char
@@ -2340,7 +2368,7 @@ namespace NSBinPptxRW
 
 		if (m_lPos + nSize > m_lSize)
 		{
-			throw;
+			throwReadOutOfRange("GetPointer", m_lPos, m_lSize);
 		}
 
 		BYTE* res = (BYTE*)m_pDataCur;
