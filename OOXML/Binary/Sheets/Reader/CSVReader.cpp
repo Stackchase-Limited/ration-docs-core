@@ -93,12 +93,19 @@ private:
 			eUnicodeConversionResult = ConvertUTF8toUTF16 (&pStrUtf8_Conv,	 &pStrUtf8[nLength]
 					, &pStrUtf16_Conv, &((UTF16 *)wStr.data())[nLength]
 					, strictConversion);
+
+			// The buffer was sized in BYTES; the conversion produces at most that many
+			// code units and usually fewer. Without this the string keeps a tail of L'\0'
+			// and reports a length larger than the text it holds, which makes the caller's
+			// end-of-data checks (nStartCell != nSize) fire on a file that ended cleanly
+			// on a newline and emit a spurious empty final row (#2209).
+			wStr.resize((size_t)(pStrUtf16_Conv - (UTF16 *)wStr.data()));
 		}
 		else //utf8 -> utf32
 		{
 			//UTF32 *pStrUtf32 = new UTF32 [nLength + 1];
 			//memset ((void *) pStrUtf32, 0, sizeof (UTF32) * (nLength + 1));
-			memset((void *)wStr.data(), 0, sizeof(UTF16) * (nLength + 1));
+			memset((void *)wStr.data(), 0, sizeof(UTF32) * (nLength + 1));
 
 			UTF8 *pStrUtf8 = (UTF8 *) data;
 
@@ -108,6 +115,9 @@ private:
 			eUnicodeConversionResult = ConvertUTF8toUTF32 (&pStrUtf8_Conv, &pStrUtf8[nLength]
 					, &pStrUtf32_Conv, &((UTF32 *)wStr.data())[nLength]
 					, strictConversion);
+
+			// See the UTF-16 branch above - trim to what was actually converted (#2209).
+			wStr.resize((size_t)(pStrUtf32_Conv - (UTF32 *)wStr.data()));
 		}
 		if (conversionOK != eUnicodeConversionResult)
 		{
