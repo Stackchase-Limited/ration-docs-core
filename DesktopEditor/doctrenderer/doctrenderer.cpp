@@ -101,6 +101,9 @@ namespace NSDoctRenderer
 		int m_nMailMergeIndexEnd;
 
 		std::wstring m_sJsonParams;
+		// #2275: the document's own name, for the &F field of a header or footer.
+		// Deliberately NOT part of m_sJsonParams - see where it is used below.
+		std::wstring m_sDocumentTitle;
 		int m_nLcid;
 
 		std::vector<int> m_arThemesThumbnailsParams;
@@ -176,6 +179,7 @@ namespace NSDoctRenderer
 
 			m_nLcid = oNode.ReadValueInt(L"Lcid", -1);
 			m_sJsonParams = oNode.ReadValueString(L"JsonParams");
+			m_sDocumentTitle = oNode.ReadValueString(L"DocumentTitle");
 
 			m_arThemesThumbnailsParams.clear();
 			std::wstring sThemesThumbnailsParams = oNode.ReadValueString(L"ThemesThumbnailsParams");
@@ -443,6 +447,23 @@ namespace NSDoctRenderer
 							JSSmart<CJSObject> argObj = args[0]->toObject();
 							argObj->set("saveFormat", CJSContext::createString("image"));
 						}
+					}
+
+					/* #2275: the &F field of a header or footer resolves from the editor's
+					   DocInfo, which only exists when an editor opened the document - never
+					   here, so the file name printed as nothing while the sheet name and
+					   page number beside it were right.
+
+					   Set it as a plain property rather than adding it to args[0]. args[0]
+					   is null whenever JsonParams is empty, and asc_nativePrint's entire
+					   "if (_options)" block is skipped on that null - a block which forces
+					   ignorePrintArea and EntireWorkbook and reapplies the page layout.
+					   Putting the title in there turns all of that on and loses the header
+					   and footer completely, which is worse than the bug. */
+					if (!pParams->m_sDocumentTitle.empty())
+					{
+						js_objectApi->set("documentTitle",
+							CJSContext::createString(U_TO_UTF8(pParams->m_sDocumentTitle)));
 					}
 
 					JSSmart<CJSValue> js_result2 = js_objectApi->call_func("asc_nativeGetPDF", 1, args);

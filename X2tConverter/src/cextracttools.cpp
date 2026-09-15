@@ -822,6 +822,40 @@ namespace NExtractTools
 			oBuilder.WriteEncodeXmlString(sJsonParams);
 			oBuilder.WriteString(L"</JsonParams>");
 		}
+
+		/* #2275: the "file name" field of a spreadsheet header or footer came out empty
+		   in an exported PDF, while the sheet name and page number beside it were right.
+		   Those two are model data; the file name is resolved from the editor's DocInfo,
+		   which only exists when an editor opened the document and never in the converter
+		   that renders the PDF.
+
+		   Its own element, deliberately not folded into JsonParams: doctrenderer passes
+		   args[0] = null to asc_nativeGetPDF whenever JsonParams is empty, and the whole
+		   of asc_nativePrint's "if (_options)" block hangs off that null. Making
+		   JsonParams non-empty turns that block on - it forces ignorePrintArea and
+		   EntireWorkbook and reapplies the page layout - and the header and footer vanish
+		   altogether.
+
+		   Prefer the title the caller gave; failing that use the source document's own
+		   name, which is what Excel shows. Editor.bin is excluded because it is our
+		   scratch file: for the desktop's own Save-as-PDF the caller has to pass
+		   m_sTitle, since by then the real name is no longer in the path. */
+		std::wstring sDocumentTitle = params.getTitle();
+		if (sDocumentTitle.empty() && NULL != params.m_sFileFrom)
+		{
+			std::wstring sSourceName = NSFile::GetFileName(*params.m_sFileFrom);
+			if (L"Editor.bin" != sSourceName)
+			{
+				size_t nDot = sSourceName.find_last_of(L'.');
+				sDocumentTitle = (std::wstring::npos != nDot) ? sSourceName.substr(0, nDot) : sSourceName;
+			}
+		}
+		if (!sDocumentTitle.empty())
+		{
+			oBuilder.WriteString(L"<DocumentTitle>");
+			oBuilder.WriteEncodeXmlString(sDocumentTitle);
+			oBuilder.WriteString(L"</DocumentTitle>");
+		}
 		oBuilder.WriteString(L"<Changes TopItem=\"");
 		oBuilder.AddInt(nTopIndex);
 		oBuilder.WriteString(L"\">");
