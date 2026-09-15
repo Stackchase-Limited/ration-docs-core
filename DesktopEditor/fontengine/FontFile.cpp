@@ -1093,8 +1093,15 @@ int CFontFile::GetGIDByUnicode(int code)
 
 	if (unGID <= 0 && !m_bStringGID)
 	{
+		// A symbolic face (Wingdings, Symbol, Webdings) carries its characters in the
+		// 0xF000-0xF0FF private-use range, so the retry has to ask for code + 0xF000 -
+		// exactly as CacheGlyph does. Without the offset this re-queried the identical
+		// code that had just returned 0 and could only return 0 again, making the whole
+		// branch dead: MetafileToRenderer::CommandDrawText (MetafileToRenderer.cpp:122)
+		// then concluded the font had no such glyph and substituted a different face,
+		// so symbol text inside EMF/WMF metafiles was drawn in the wrong font.
 		if (-1 != m_nSymbolic && code < 0xF000)
-			unGID = SetCMapForCharCode(code, &nCMapIndex);
+			unGID = SetCMapForCharCode(code + 0xF000, &nCMapIndex);
 	}
 
 	return unGID;
