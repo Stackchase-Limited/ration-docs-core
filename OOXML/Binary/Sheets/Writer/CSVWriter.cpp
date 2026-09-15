@@ -399,11 +399,15 @@ std::wstring CSVWriter::Impl::convert_date_time(const std::wstring & sValue, std
                         }
                         case L'4':
                         {
+                            /* #1372: '4' is the locale's TWO-digit year (against '5' for the
+                               four-digit one, just below). The two digits were duly computed
+                               into lastTwoChars and then thrown away - the full year was
+                               appended instead, so locales whose short date asks for a
+                               two-digit year got a four-digit one. */
                             if (currentTime->tm_year >= 1000)
                             {
                                 auto sringYear = std::to_wstring(currentTime->tm_year);
-                                auto lastTwoChars = sringYear.substr(sringYear.length() - 2);
-                                date_str += sringYear;
+                                date_str += sringYear.substr(sringYear.length() - 2);
                             }
                             else
                                 date_str += std::to_wstring(currentTime->tm_year);
@@ -885,8 +889,23 @@ void CSVWriter::Impl::WriteCell(OOX::Spreadsheet::CCell *pCell)
 							int numFmt = xfs->m_oNumFmtId->GetValue();
 
 							GetDefaultFormatCode(numFmt, format_code, format_type);
+							/* #1372: the third test was written `|| SimpleTypes::Spreadsheet::celltypeTime`
+							   instead of `|| *format_type == ...celltypeTime`. celltypeTime is 10, so the
+							   whole parenthesis was a non-zero constant and this flag was simply
+							   "format_type is set" - true for numbers, currencies, percentages and
+							   fractions as well as for dates.
+
+							   The flag guards `format_code = L""`, whose entire purpose is to drop a
+							   built-in DATE format so convert_date_time falls through to the locale
+							   short-date branch. Applied to a number it throws the format away with
+							   nothing to fall back on: ConvertValueCellToString's default arm returns
+							   the raw value when format_code is empty. Verified against our own x2t on
+							   a workbook using only built-in numFmtIds - 0.5 with numFmtId 9 exported
+							   as "0.5" rather than "50%", and 1234.5 with numFmtId 4 as "1234.5"
+							   rather than "1,234.50", while the date beside them came out correct. */
 							auto formatTypeIsDateTime = format_type && (*format_type == SimpleTypes::Spreadsheet::celltypeDate ||
-								*format_type == SimpleTypes::Spreadsheet::celltypeDateTime ||  SimpleTypes::Spreadsheet::celltypeTime);
+								*format_type == SimpleTypes::Spreadsheet::celltypeDateTime ||
+								*format_type == SimpleTypes::Spreadsheet::celltypeTime);
 							if (m_oXlsx.m_pStyles->m_oNumFmts.IsInit())
 							{
 								std::map<unsigned int, size_t>::iterator pFind = m_oXlsx.m_pStyles->m_oNumFmts->m_mapNumFmtIndex.find(numFmt);
