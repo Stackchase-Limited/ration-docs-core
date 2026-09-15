@@ -137,6 +137,23 @@ public:
 		ar6.push_back(L"Cambria");
 		ar6.push_back(L"Caladea");
 		m_listLikes.push_back(ar6);
+
+		// 7 [Verdana]
+		// Kept identical to FD_Ascii_Font_Like_Names in sdkjs/common/libfont/map.js:
+		// the editor scores substitutions in JS and the converter scores them here,
+		// so the two tables have to agree or a document lays out one way on screen
+		// and another way once it is rendered. Verdana has no metric clone, and left
+		// to the penalty scorer it lands on Open Sans, whose line box is 12% taller -
+		// enough to spill a full page onto a second one (#1570). DejaVu Sans descends
+		// from Bitstream Vera, drawn to Verdana's proportions, and is what LibreOffice
+		// substitutes.
+		m_mapNamesToIndex.insert(std::pair<std::wstring, int>(L"Verdana", 7));
+		m_mapNamesToIndex.insert(std::pair<std::wstring, int>(L"DejaVu Sans", 7));
+
+		std::vector<std::wstring> ar7;
+		ar7.push_back(L"Verdana");
+		ar7.push_back(L"DejaVu Sans");
+		m_listLikes.push_back(ar7);
 	}
 
 	bool IsLikeFonts(const std::wstring& name, const std::wstring& req)
