@@ -578,7 +578,22 @@ namespace PdfWriter
 			{
 				m_pOutlines = new COutline(m_pXref);
 				if (m_pOutlines)
+				{
 					m_pCatalog->Add("Outlines", m_pOutlines);
+
+					/* #1855: "PDF export does not include table of contents".
+					   The catalog's page mode is nailed to UseNone when the
+					   document is created (see NewDocument) and was never
+					   revisited, so even a document that does carry a full
+					   /Outlines tree opened with the bookmarks pane shut - and
+					   a reader comparing against LibreOffice, which writes
+					   UseOutlines whenever it emits an outline, sees no table
+					   of contents at all. Ask for the pane only here, where we
+					   know an outline exists; documents without one keep
+					   UseNone. Add() replaces an existing key, so this simply
+					   supersedes the value set at creation. */
+					m_pCatalog->SetPageMode(pagemode_UseOutline);
+				}
 				else
 					return NULL;
 			}
