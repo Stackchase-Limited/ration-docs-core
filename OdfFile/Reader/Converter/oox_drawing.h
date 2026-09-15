@@ -130,6 +130,7 @@ namespace oox
 		_action_desc				action;
 		std::vector<_hlink_desc>	hlinks;
 		std::wstring	hyperlink;
+		std::wstring	macro;		//  xdr:sp/@macro - see OdfFile/Common/jsa_macro.h
 
         std::vector<odf_reader::_property> additional;
 

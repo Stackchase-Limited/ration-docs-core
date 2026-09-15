@@ -224,6 +224,11 @@ void draw_frame::xlsx_convert(oox::xlsx_conversion_context & Context)
 		oox_drawing_ = oox_drawing_ptr(new oox::_xlsx_drawing());
 	}
 
+	//  a macro bound to this shape - draw:frame keeps office:event-listeners in its
+	//  own member rather than in content_, so it has to be converted explicitly
+	if (office_event_listeners_)
+		office_event_listeners_->xlsx_convert(Context);
+
 	for (size_t i = 0 ; i < content_.size(); i++)
     {
 		office_element_ptr const & elm = content_[i];

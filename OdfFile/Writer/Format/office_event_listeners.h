@@ -104,8 +104,19 @@ public:
 CP_REGISTER_OFFICE_ELEMENT2(presentation_event_listener);
 
 
-//  script:event-listeners_
-class script_event_listener : public office_element_impl<presentation_event_listener>
+//-------------------------------------------------------------------------------------
+class script_event_listener_attlist
+{
+public:
+    void serialize(CP_ATTR_NODE);
+
+	odf_types::common_xlink_attlist	common_xlink_attlist_;
+	_CP_OPT(std::wstring)			script_event_name_;
+	_CP_OPT(std::wstring)			script_language_;
+};
+
+//  script:event-listener
+class script_event_listener : public office_element_impl<script_event_listener>
 {
 public:
     static const wchar_t * ns;
@@ -119,6 +130,7 @@ public:
 
     virtual void serialize(std::wostream & _Wostream);
 
+	script_event_listener_attlist	attlist_;
     office_element_ptr_array content_;    
 };
 CP_REGISTER_OFFICE_ELEMENT2(script_event_listener);

@@ -206,6 +206,7 @@ void xlsx_drawing_context::clear()
 	impl_->object_description_.hlinks_.clear();
 	impl_->object_description_.action_.clear();
 	impl_->object_description_.additional_.clear();
+	impl_->object_description_.macro_				= L"";
 
 	impl_->use_image_replacement_					= false;
 }
@@ -339,6 +340,12 @@ void xlsx_drawing_context::end_control()
 {
 	impl_->current_level_->push_back(impl_->object_description_);
 	clear();
+}
+void xlsx_drawing_context::set_macro(const std::wstring & macro)
+{
+	if (macro.empty()) return;
+
+	impl_->object_description_.macro_ = macro;
 }
 void xlsx_drawing_context::set_use_image_replacement()
 {
@@ -581,6 +588,7 @@ void xlsx_drawing_context::process_common_properties(drawing_object_description 
 	drawing.additional	= obj.additional_;
 	drawing.hlinks		= obj.hlinks_;
 	drawing.action		= obj.action_;
+	drawing.macro		= obj.macro_;
 }
 void xlsx_drawing_context::process_position_properties(drawing_object_description & obj, xlsx_table_metrics & table_metrics,xlsx_table_position & from,xlsx_table_position & to, bool byEnd)
 {

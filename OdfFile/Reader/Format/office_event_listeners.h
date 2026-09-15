@@ -54,6 +54,7 @@ public:
     CPDOCCORE_DEFINE_VISITABLE();
    
 	virtual void pptx_convert(oox::pptx_conversion_context & Context);
+	virtual void xlsx_convert(oox::xlsx_conversion_context & Context);
 
 private:
     virtual void add_attributes( const xml::attributes_wc_ptr & Attributes );
@@ -110,8 +111,20 @@ private:
 CP_REGISTER_OFFICE_ELEMENT2(presentation_event_listener);
 
 
-//  script:event-listeners_
-class script_event_listener : public office_element_impl<presentation_event_listener>
+//-------------------------------------------------------------------------------------
+class script_event_listener_attlist
+{
+public:
+    void add_attributes( const xml::attributes_wc_ptr & Attributes );
+
+	odf_types::common_xlink_attlist	xlink_attlist_;
+
+	_CP_OPT(std::wstring)	script_event_name_;
+	_CP_OPT(std::wstring)	script_language_;
+};
+
+//  script:event-listener
+class script_event_listener : public office_element_impl<script_event_listener>
 {
 public:
     static const wchar_t * ns;
@@ -120,11 +133,14 @@ public:
     static const ElementType type = typeScriptEventListener;
     CPDOCCORE_DEFINE_VISITABLE();
 
+	virtual void xlsx_convert(oox::xlsx_conversion_context & Context);
+
 private:
     virtual void add_attributes( const xml::attributes_wc_ptr & Attributes );
     virtual void add_child_element( xml::sax * Reader, const std::wstring & Ns, const std::wstring & Name);
 
 private:
+	script_event_listener_attlist	attlist_;
     office_element_ptr_array content_;
 
     

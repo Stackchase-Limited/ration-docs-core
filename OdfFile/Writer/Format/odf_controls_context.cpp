@@ -41,6 +41,9 @@
 #include "odf_conversion_context.h"
 
 #include "office_forms.h"
+#include "office_event_listeners.h"
+
+#include "../../Common/jsa_macro.h"
 
 #include "../../Formulas/formulasconvert.h"
 
@@ -289,7 +292,28 @@ void odf_controls_context::set_macro(const std::wstring & val)
 	if (val.empty()) return;
 	if (impl_->controls_.empty()) return;
 
-	//impl_->controls_.back().form_elm-> = val;
+	odf_writer::form_element *control = impl_->controls_.back().form_elm;
+	if (!control) return;
+
+	//  same carrier as a macro assigned to a shape - see Common/jsa_macro.h
+	office_element_ptr elm_listeners, elm_listener;
+
+	create_element(L"office", L"event-listeners", elm_listeners, impl_->odf_context_);
+	create_element(L"script", L"event-listener", elm_listener, impl_->odf_context_);
+
+	if (!elm_listeners || !elm_listener) return;
+
+	script_event_listener *listener = dynamic_cast<script_event_listener*>(elm_listener.get());
+	if (!listener) return;
+
+	listener->attlist_.script_event_name_			= jsa_macro::event;
+	listener->attlist_.script_language_				= jsa_macro::language;
+	listener->attlist_.common_xlink_attlist_.href_	= jsa_macro::to_href(val);
+	listener->attlist_.common_xlink_attlist_.type_	= odf_types::xlink_type::Simple;
+
+	elm_listeners->add_child_element(elm_listener);
+
+	control->office_event_listeners_ = elm_listeners;
 }
 void odf_controls_context::set_disabled	(bool val)
 {

@@ -45,6 +45,7 @@
 #include "odf_style_context.h"
 #include "odf_conversion_context.h"
 #include "office_event_listeners.h"
+#include "../../Common/jsa_macro.h"
 
 #include "draw_frame.h"
 #include "draw_shapes.h"
@@ -225,6 +226,7 @@ struct odf_drawing_state
 
 		draw_type_ = boost::none;
 
+		macro_				= L"";
 	}
 	std::vector<odf_element_state>	elements_;
 
@@ -243,6 +245,7 @@ struct odf_drawing_state
 
 	std::wstring	name_;
 	std::wstring	description_;
+	std::wstring	macro_;
 	std::wstring	xml_id_;
 	int				z_order_;
 	bool			hidden_;
@@ -599,6 +602,33 @@ void odf_drawing_context::set_anchor_drawing(graphic_format_properties *graphic_
 	
 	graphic_properties->style_run_through_ = impl_->anchor_settings_.run_through_;
 }
+//  Bind a macro to a drawing object the way ODF binds a script to an event -
+//  office:event-listeners / script:event-listener on the drawing element.
+//  The convention for what goes inside is Common/jsa_macro.h.
+static void add_macro_listener(draw_base * draw, const std::wstring & macro, odf_conversion_context * odf_context)
+{
+	if (!draw || macro.empty()) return;
+
+	office_element_ptr elm_listeners, elm_listener;
+
+	create_element(L"office", L"event-listeners", elm_listeners, odf_context);
+	create_element(L"script", L"event-listener", elm_listener, odf_context);
+
+	if (!elm_listeners || !elm_listener) return;
+
+	script_event_listener * listener = dynamic_cast<script_event_listener*>(elm_listener.get());
+	if (!listener) return;
+
+	listener->attlist_.script_event_name_					= jsa_macro::event;
+	listener->attlist_.script_language_						= jsa_macro::language;
+	listener->attlist_.common_xlink_attlist_.href_			= jsa_macro::to_href(macro);
+	listener->attlist_.common_xlink_attlist_.type_			= xlink_type::Simple;
+
+	elm_listeners->add_child_element(elm_listener);
+
+	draw->add_child_element(elm_listeners);
+}
+
 void odf_drawing_context::end_drawing()
 {
 	int index = impl_->current_drawing_state_.index_base < 0 ? 0 : impl_->current_drawing_state_.index_base;
@@ -634,6 +664,8 @@ void odf_drawing_context::end_drawing()
 		}
 		if (!impl_->current_drawing_state_.name_.empty())
 			draw->common_draw_attlists_.shape_with_text_and_styles_.common_shape_draw_attlist_.draw_name_ = impl_->current_drawing_state_.name_;
+		if (!impl_->current_drawing_state_.macro_.empty())
+			add_macro_listener(draw, impl_->current_drawing_state_.macro_, impl_->odf_context_);
 		if (impl_->current_drawing_state_.z_order_ >= 0)
 			draw->common_draw_attlists_.shape_with_text_and_styles_.common_shape_draw_attlist_.draw_z_index_ = impl_->current_drawing_state_.z_order_;
 		if (impl_->current_drawing_state_.hidden_)
@@ -1427,6 +1459,12 @@ void odf_drawing_context::set_name(const std::wstring & name)
 	if (name.empty()) return;
 
 	impl_->current_drawing_state_.name_ = name;
+}
+void odf_drawing_context::set_macro(const std::wstring & macro)
+{
+	if (macro.empty()) return;
+
+	impl_->current_drawing_state_.macro_ = macro;
 }
 void odf_drawing_context::set_description (const std::wstring & description)
 {

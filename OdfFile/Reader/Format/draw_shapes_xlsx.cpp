@@ -148,6 +148,16 @@ void draw_shape::common_xlsx_convert(oox::xlsx_conversion_context & Context)
 	Context.get_drawing_context().set_fill(fill);
 
 //////////////////////////////////////////////////////////////////////////////////////	
+	//  A macro bound to this shape.  It has to be converted before
+	//  start_drawing_context(), which swaps in a nested drawing context for any
+	//  drawing embedded in the text - a macro set on that one would be thrown away
+	//  with it.
+	for (size_t i = 0; i < content_.size(); i++)
+	{
+		if (content_[i] && typeOfficeEventListeners == content_[i]->get_type())
+			content_[i]->xlsx_convert(Context);
+	}
+
 	Context.get_text_context()->start_drawing_content();
 	Context.start_drawing_context();
 
@@ -158,6 +168,8 @@ void draw_shape::common_xlsx_convert(oox::xlsx_conversion_context & Context)
 
 	for (size_t i = 0; i < content_.size(); i++)
     {
+		if (content_[i] && typeOfficeEventListeners == content_[i]->get_type()) continue;
+
         content_[i]->xlsx_convert(Context);
     }
 	std::wstring text_content_ = Context.get_text_context()->end_drawing_content();
@@ -347,6 +359,10 @@ void draw_control::xlsx_convert(oox::xlsx_conversion_context & Context)
 		Context.get_drawing_context().set_property(_property(L"label", control->label_.get()));
 		Context.get_drawing_context().set_property(_property(L"text-content", control->label_.get()));
 	}
+	//  a macro assigned to the control - it hangs off the form element, not off
+	//  draw:control, and lands on controlPr/@macro on the way out
+	if (control->office_event_listeners_)
+		control->office_event_listeners_->xlsx_convert(Context);
 	//if (control->name_)
 	//{
 	//	Context.get_drawing_context().set_name(control->name_.get());

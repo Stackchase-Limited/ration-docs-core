@@ -36,6 +36,9 @@
 #include "office_event_listeners.h"
 #include "serialize_elements.h"
 
+#include "../../Common/jsa_macro.h"
+#include "../Converter/xlsxconversioncontext.h"
+
 #include "boost/algorithm/string.hpp"
 
 #include <xml/xmlchar.h>
@@ -69,6 +72,16 @@ void office_event_listeners::pptx_convert(oox::pptx_conversion_context & Context
     for (size_t i = 0; i < presentation_event_listeners_.size(); i++)
     {
 		presentation_event_listeners_[i]->pptx_convert(Context);
+	}
+}
+void office_event_listeners::xlsx_convert(oox::xlsx_conversion_context & Context)
+{
+	//  a spreadsheet drawing carries only script listeners - a macro bound to a
+	//  click.  presentation:event-listener is a slide-show action and has no
+	//  xlsx equivalent.
+    for (size_t i = 0; i < script_event_listeners_.size(); i++)
+    {
+		script_event_listeners_[i]->xlsx_convert(Context);
 	}
 }
 // presentation:event-listener-attlist
@@ -144,13 +157,36 @@ void presentation_event_listener::pptx_convert(oox::pptx_conversion_context & Co
 const wchar_t * script_event_listener::ns = L"script";
 const wchar_t * script_event_listener::name = L"event-listener";
 
+void script_event_listener_attlist::add_attributes( const xml::attributes_wc_ptr & Attributes )
+{
+	xlink_attlist_.add_attributes(Attributes);
+
+	CP_APPLY_ATTR(L"script:event-name", script_event_name_);
+	CP_APPLY_ATTR(L"script:language", script_language_);
+}
+
 void script_event_listener::add_attributes( const xml::attributes_wc_ptr & Attributes )
 {
+	attlist_.add_attributes(Attributes);
 }
 
 void script_event_listener::add_child_element( xml::sax * Reader, const std::wstring & Ns, const std::wstring & Name)
 {
     CP_CREATE_ELEMENT(content_);
+}
+
+void script_event_listener::xlsx_convert(oox::xlsx_conversion_context & Context)
+{
+	if (!attlist_.xlink_attlist_.href_) return;
+
+	//  only our own binding comes back as an OOXML @macro - see Common/jsa_macro.h.
+	//  Anything else (a Basic macro written by another application, say) is left
+	//  alone rather than guessed at.
+	const std::wstring macro = jsa_macro::from_href(*attlist_.xlink_attlist_.href_,
+													attlist_.script_language_.get_value_or(L""));
+	if (macro.empty()) return;
+
+	Context.get_drawing_context().set_macro(macro);
 }
 
 }

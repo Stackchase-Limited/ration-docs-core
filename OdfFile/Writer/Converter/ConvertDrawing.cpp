@@ -289,6 +289,9 @@ void OoxConverter::convert(PPTX::Logic::Pic *oox_picture)
 {
 	if (!oox_picture) return;
 
+	if (oox_picture->macro.IsInit())
+		odf_context()->drawing_context()->set_macro(*oox_picture->macro);
+
 	if (oox_picture->spPr.Geometry.is_init())
 	{
 		int type = SimpleTypes::shapetypeRect;
@@ -821,6 +824,9 @@ void OoxConverter::convert(PPTX::Logic::CxnSp *oox_connect)
 	}
 	odf_context()->drawing_context()->start_shape(type);
 	
+		if (oox_connect->macro.IsInit())
+			odf_context()->drawing_context()->set_macro(*oox_connect->macro);
+
 		convert(&oox_connect->spPr, oox_connect->style.GetPointer());
 		convert(&oox_connect->nvCxnSpPr);
 
@@ -829,6 +835,9 @@ void OoxConverter::convert(PPTX::Logic::CxnSp *oox_connect)
 void OoxConverter::convert(PPTX::Logic::Shape *oox_shape)
 {
 	if (oox_shape == NULL) return;
+
+	if (oox_shape->macro.IsInit())
+		odf_context()->drawing_context()->set_macro(*oox_shape->macro);
 
 	if (oox_shape->txXfrm.IsInit())
 	{

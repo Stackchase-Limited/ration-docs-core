@@ -135,6 +135,14 @@ void presentation_event_listener::serialize(std::wostream & _Wostream)
 	}
 }
 
+//---------------------------------------------------------------------------------------------------------------
+void script_event_listener_attlist::serialize(CP_ATTR_NODE)
+{
+	CP_XML_ATTR_OPT(L"script:event-name", script_event_name_);
+	CP_XML_ATTR_OPT(L"script:language", script_language_);
+
+	common_xlink_attlist_.serialize(CP_GET_XML_NODE());
+}
 // script:event-listener
 //////////////////////////////////////////////////////////////////////////////////////////////////
 const wchar_t * script_event_listener::ns	= L"script";
@@ -154,6 +162,12 @@ void script_event_listener::serialize(std::wostream & _Wostream)
     {
 		CP_XML_NODE_SIMPLE()
         {
+			attlist_.serialize(CP_GET_XML_NODE());
+
+			for (size_t i = 0; i < content_.size(); i++)
+			{
+				content_[i]->serialize(CP_XML_STREAM());
+			}
 		}
 	}
 }

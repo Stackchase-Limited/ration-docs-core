@@ -78,6 +78,7 @@ struct drawing_object_description
 
 	_action_desc							action_;
 	std::vector<_hlink_desc>				hlinks_;
+	std::wstring							macro_;			//  xdr:sp/@macro
 
 	bool									hidden_;
 

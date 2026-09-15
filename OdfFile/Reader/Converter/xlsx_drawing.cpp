@@ -143,6 +143,8 @@ void xml_serialize_image(std::wostream & strm, _xlsx_drawing & val, const std::w
     {
         CP_XML_NODE(ns + L":pic")
         {                  
+			if (false == val.macro.empty()) CP_XML_ATTR(L"macro", val.macro);
+
             CP_XML_NODE(ns + L":nvPicPr")
             {
                 CP_XML_NODE(ns + L":cNvPr")
@@ -190,6 +192,8 @@ void xml_serialize_shape(std::wostream & strm, _xlsx_drawing & val, const std::w
     {
         CP_XML_NODE(ns + L":sp")
         {                  
+			if (false == val.macro.empty()) CP_XML_ATTR(L"macro", val.macro);
+
             CP_XML_NODE(ns + L":nvSpPr")
             {
                 CP_XML_NODE(ns + L":cNvPr")
@@ -271,6 +275,8 @@ void xml_serialize_group(std::wostream & strm, _xlsx_drawing & val, const std::w
     {
 		CP_XML_NODE(ns + L":grpSp")
 		{
+			if (false == val.macro.empty()) CP_XML_ATTR(L"macro", val.macro);
+
             CP_XML_NODE(ns + L":nvGrpSpPr")
             {
                 CP_XML_NODE(ns + L":cNvPr")
@@ -483,6 +489,7 @@ void _xlsx_drawing::serialize_control (std::wostream & strm)
 			CP_XML_NODE(L"controlPr")
 			{
 				CP_XML_ATTR(L"defaultSize", 0);
+				if (false == macro.empty()) CP_XML_ATTR(L"macro", macro);
 				if (fill.bitmap)
 				{
 					CP_XML_ATTR(L"r:id", fill.bitmap->rId);

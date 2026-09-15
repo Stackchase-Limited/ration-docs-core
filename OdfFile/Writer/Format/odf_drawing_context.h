@@ -235,6 +235,7 @@ public:
 	
 	void set_name			(const std::wstring & name);
 	void set_description	(const std::wstring & descr);
+	void set_macro			(const std::wstring & macro);	//  xdr:sp/@macro - see Common/jsa_macro.h
 	void set_hidden			(bool bVal);
 	void set_z_order		(int id);
 	

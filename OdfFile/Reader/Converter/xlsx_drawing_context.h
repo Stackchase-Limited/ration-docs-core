@@ -135,6 +135,8 @@ public:
 	void set_is_line_shape(bool val);
 	void set_is_connector_shape(bool val);
 
+	void set_macro		(const std::wstring & macro);
+
 	void set_property	(odf_reader::_property p);
 	std::vector<odf_reader::_property> & get_properties();
 
