@@ -628,43 +628,65 @@ namespace ZLibZipUtils
 				std::vector<std::wstring> aCurFiles			= NSDirectory::GetFiles(szText);
 				std::vector<std::wstring> aCurDirectories	= NSDirectory::GetDirectories(szText);
 
+				/* #1323: "the mimetype of a docx changes when content is added".
+				 *
+				 * An OOXML package is identified by the ORDER of its first entries.
+				 * libmagic reads entry 1 (which must be [Content_Types].xml), then
+				 * hops to entry 3 and requires its name to begin with "word/",
+				 * "xl/" or "ppt/" - searching only a bounded window for the header.
+				 * Word, and every other producer, therefore writes
+				 * [Content_Types].xml, then _rels/.rels, then the part directory.
+				 *
+				 * This loop used to push_front `word` and `_rels` in whatever order
+				 * NSDirectory::GetDirectories happened to return them, and a
+				 * push_front means the one seen LAST ends up first. On a filesystem
+				 * that enumerates "_rels" before "word" the package came out as
+				 * [Content_Types].xml, word/document.xml, _rels/.rels - so entry 3
+				 * was _rels/.rels, the rule fell through to a further search, and
+				 * whether it found a "word/" entry inside its window then depended
+				 * on how big word/document.xml compressed to. An empty document was
+				 * identified as "Microsoft Word 2007+"; the same document with text
+				 * in it pushed the remaining entries out of the window and degraded
+				 * to plain "application/zip", which is exactly what was reported.
+				 *
+				 * Bucket the directories instead of racing push_front against
+				 * readdir order, so _rels always precedes the part directory and
+				 * the result does not vary by filesystem. */
+				std::vector<std::wstring> aRelsDirs;
+				std::vector<std::wstring> aPartDirs;
+
 				for(size_t i = 0; i < aCurDirectories.size(); ++i)
 				{
 					std::wstring sDirName = NSSystemPath::GetFileName(aCurDirectories[i]);
 
 					if (sorted)
 					{
-						if (sDirName == L"ppt")
+						if (sDirName == L"_rels")
 						{
-							StringDeque.push_front(aCurDirectories[i] );
-							zipDeque.push_front( zipDir + sDirName );
+							aRelsDirs.push_back( aCurDirectories[i] );
+							continue;
 						}
-						else if(sDirName == L"xl")
+						if (sDirName == L"ppt" || sDirName == L"xl" || sDirName == L"word")
 						{
-							StringDeque.push_front( aCurDirectories[i] );
-							zipDeque.push_front( zipDir + sDirName );
-						}
-						else if (sDirName == L"word")
-						{
-							StringDeque.push_front( aCurDirectories[i] );
-							zipDeque.push_front( zipDir + sDirName );
-						}
-						else if (sDirName == L"_rels")
-						{
-							StringDeque.push_front(aCurDirectories[i]);
-							zipDeque.push_front(zipDir + sDirName);
-						}
-						else
-						{
-							StringDeque.push_back( aCurDirectories[i] );
-							zipDeque.push_back( zipDir + sDirName );
+							aPartDirs.push_back( aCurDirectories[i] );
+							continue;
 						}
 					}
-					else
-					{
-						StringDeque.push_back( aCurDirectories[i] );
-						zipDeque.push_back( zipDir + sDirName );
-					}
+					StringDeque.push_back( aCurDirectories[i] );
+					zipDeque.push_back( zipDir + sDirName );
+				}
+
+				/* The front of the deque is built back to front: push the part
+				 * directories first and _rels after them, so _rels comes out ahead. */
+				for(size_t i = aPartDirs.size(); i-- > 0; )
+				{
+					StringDeque.push_front( aPartDirs[i] );
+					zipDeque.push_front( zipDir + NSSystemPath::GetFileName(aPartDirs[i]) );
+				}
+				for(size_t i = aRelsDirs.size(); i-- > 0; )
+				{
+					StringDeque.push_front( aRelsDirs[i] );
+					zipDeque.push_front( zipDir + NSSystemPath::GetFileName(aRelsDirs[i]) );
 				}
 
 				for (size_t i = 0; i < aCurFiles.size(); ++i)
