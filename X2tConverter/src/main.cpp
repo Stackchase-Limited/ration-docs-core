@@ -41,6 +41,9 @@
 #include "../../DesktopEditor/fontengine/ApplicationFontsWorker.h"
 
 #include <iostream>
+#include <exception>
+#include <new>
+#include <stdio.h>
 
 #define VALUE_TO_STRING(x) #x
 #define VALUE(x) VALUE_TO_STRING(x)
@@ -54,19 +57,70 @@ static std::wstring utf8_to_unicode(const char *src)
 }
 #endif
 
-#ifdef BUILD_X2T_AS_LIBRARY_DYLIB
+// #1359 (second half): x2t caps its own heap.  main() below applies
+// X2T_MEMORY_LIMIT - 4GiB by default - with setrlimit(RLIMIT_DATA) (see
+// Common/3dParty/misc/proclimits.h; a Job Object on Windows).  Until this
+// commit nothing in x2t caught anything, so the std::bad_alloc thrown when a
+// file exhausts that cap ran off the top of main, terminate() fired, and the
+// process died on a signal.  The editor cannot tell that from a corrupt file:
+// it has no exit code to read, only a dead converter, so it shows the generic
+// "Something has gone wrong...".
+//
+// The CSV reader materialises the whole workbook before writing anything, at
+// roughly 120x the input size (measured: 8.5MB -> 982MB, 35.5MB -> 2.7GB), so
+// the cap is reached by ordinary files - the cliff sits between the #1359
+// reporter's 9.5MB CSV, which opens, and their 35.6MB one, which does not.
+//
+// This does NOT raise or remove the limit, and does not try to carry on: an
+// operator new that has already failed leaves the process in a poor state.  It
+// turns dying on a signal into returning an error code, and then exits.
+//
+// AVS_FILEUTILS_ERROR_CONVERT_LIMITS is the code to return, because it is the
+// one that already has a user-visible message on the other side:
+// getReturnErrorCode turns it into exit 93, sdkjs/common/editorscommon.js:1692
+// maps -93 to c_oAscServerError.ConvertLIMITS, :1050 maps that to
+// c_oAscError.ID.ConvertationOpenLimitError, and the spreadsheet shell renders
+// it as errorFileSizeExceed - "The file size exceeds the limitation...".  It is
+// also what ASCConverters.cpp:1758 already returns when checkInputLimits()
+// rejects a file up front, which is the same condition reached the slow way.
+// AVS_FILEUTILS_ERROR_CONVERT_CELLLIMITS was the other candidate and is wrong
+// twice over: sdkjs has no entry for -96 at all, so it would fall through to
+// Unknown, and SUCCEEDED_X2T (cextracttools.h:55) counts it as success.
+//
+// Called from inside catch(...), so `throw;` re-raises the exception being
+// handled and the handlers below classify it.  Nothing in here allocates: we
+// may be unwinding precisely because allocation just failed, which is why this
+// writes with fputs on string literals rather than std::cout << std::string.
+static _UINT32 errorCodeForCurrentException()
+{
+	try
+	{
+		throw;
+	}
+	catch (const std::bad_alloc&)
+	{
+		fputs("x2t: out of memory - conversion aborted. The file needs more than this "
+			  "process is allowed to allocate (X2T_MEMORY_LIMIT).\n", stderr);
+		return AVS_FILEUTILS_ERROR_CONVERT_LIMITS;
+	}
+	catch (const std::exception& e)
+	{
+		fputs("x2t: conversion aborted by an exception: ", stderr);
+		fputs(e.what(), stderr);
+		fputs("\n", stderr);
+		return AVS_FILEUTILS_ERROR_CONVERT;
+	}
+	catch (...)
+	{
+		fputs("x2t: conversion aborted by an unknown exception\n", stderr);
+		return AVS_FILEUTILS_ERROR_CONVERT;
+	}
+}
+
 #if !defined(_WIN32) && !defined(_WIN64)
-int main_lib(int argc, char *argv[])
+static int mainUnguarded(int argc, char *argv[])
 #else
-int wmain_lib(int argc, wchar_t *argv[])
-#endif
-#endif
-#ifndef BUILD_X2T_AS_LIBRARY_DYLIB
-#if !defined(_WIN32) && !defined(_WIN64)
-	int main(int argc, char *argv[])
-#else
-	int wmain(int argc, wchar_t *argv[])
-#endif
+static int mainUnguarded(int argc, wchar_t *argv[])
 #endif
 {
 	// #define __CRTDBG_MAP_ALLOC
@@ -213,4 +267,39 @@ int wmain_lib(int argc, wchar_t *argv[])
 	}
 	//_CrtDumpMemoryLeaks();
 	return getReturnErrorCode(result);
+}
+
+#if !defined(_WIN32) && !defined(_WIN64)
+static int mainGuarded(int argc, char *argv[])
+#else
+static int mainGuarded(int argc, wchar_t *argv[])
+#endif
+{
+	try
+	{
+		return mainUnguarded(argc, argv);
+	}
+	catch (...)
+	{
+		// Report it and leave.  Do not attempt to keep converting.
+		return getReturnErrorCode(errorCodeForCurrentException());
+	}
+}
+
+#ifdef BUILD_X2T_AS_LIBRARY_DYLIB
+#if !defined(_WIN32) && !defined(_WIN64)
+int main_lib(int argc, char *argv[])
+#else
+int wmain_lib(int argc, wchar_t *argv[])
+#endif
+#endif
+#ifndef BUILD_X2T_AS_LIBRARY_DYLIB
+#if !defined(_WIN32) && !defined(_WIN64)
+	int main(int argc, char *argv[])
+#else
+	int wmain(int argc, wchar_t *argv[])
+#endif
+#endif
+{
+	return mainGuarded(argc, argv);
 }

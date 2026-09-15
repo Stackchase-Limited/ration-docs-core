@@ -86,7 +86,12 @@ namespace NSEncoding
 		}
 		else
 		{
-			const NSUnicodeConverter::EncodindId& oEncodindId = NSUnicodeConverter::Encodings[code_page];
+			// #1359: code_page is a caller-supplied number, not a checked index - this is
+			// the same unguarded subscript of the 54-entry Encodings table that crashed the
+			// CSV reader.  GetEncodingIndex keeps it inside the table and translates a
+			// Windows code page to its row.  (-1 is handled above, as "ansi".)
+			const NSUnicodeConverter::EncodindId& oEncodindId =
+				NSUnicodeConverter::Encodings[NSUnicodeConverter::GetEncodingIndex(code_page)];
 			NSUnicodeConverter::CUnicodeConverter oUnicodeConverter;
 
 			for (std::vector<std::string>::const_iterator iter = lines.begin(); iter != lines.end(); iter++)
@@ -109,7 +114,10 @@ namespace NSEncoding
 		}
 		else
 		{
-			const NSUnicodeConverter::EncodindId& oEncodindId = NSUnicodeConverter::Encodings[code_page];
+			// #1359: same unguarded subscript on the export side - File::writeCodePage
+			// hands this whatever code page it was given.
+			const NSUnicodeConverter::EncodindId& oEncodindId =
+				NSUnicodeConverter::Encodings[NSUnicodeConverter::GetEncodingIndex(code_page)];
 			NSUnicodeConverter::CUnicodeConverter oUnicodeConverter;
 
 			for (std::vector<std::wstring>::const_iterator iter = lines.begin(); iter != lines.end(); iter++)
@@ -143,7 +151,10 @@ namespace Txt
 		std::vector<std::string> codePageContent = file.readAnsiOrCodePage();
 		m_listContentSize = file.getLinesCount();
 
-		const NSUnicodeConverter::EncodindId& oEncodindId = NSUnicodeConverter::Encodings[code_page];
+		// #1359: same unguarded subscript again, here with no range check of any kind
+		// in front of it - File::read(filename, code_page) passes its argument straight in.
+		const NSUnicodeConverter::EncodindId& oEncodindId =
+			NSUnicodeConverter::Encodings[NSUnicodeConverter::GetEncodingIndex(code_page)];
 		NSUnicodeConverter::CUnicodeConverter oUnicodeConverter;
 
 		for (std::vector<std::string>::const_iterator iter = codePageContent.begin(); iter != codePageContent.end(); ++iter)

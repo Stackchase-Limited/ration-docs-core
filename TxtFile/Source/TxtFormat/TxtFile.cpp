@@ -94,15 +94,16 @@ const std::vector<std::string> TxtFile::readUtf8Lines(int IdxEncoding)
     {
         std::wstring unicode_content;
 
-        if (IdxEncoding >= 0 && IdxEncoding < UNICODE_CONVERTER_ENCODINGS_COUNT)
-        {
-            const char* encodingName = NSUnicodeConverter::Encodings[IdxEncoding].Name;
-            unicode_content = conv.toUnicode(file_data.get(), read_size, encodingName);
-        }
-        else
-        {
-            unicode_content = conv.toUnicode(file_data.get(), read_size, 65001);
-        }
+        // #1359: IdxEncoding is the caller's <m_nCsvTxtEncoding>, the same number that
+        // reached the CSV reader's unguarded subscript.  The hand-written range check
+        // that used to stand here did keep the subscript inside the 54-entry table, but
+        // it sent every value outside 0..53 - including 65001, 1252, 1251 and the rest
+        // of the Windows code pages the editor API documents callers to send - down a
+        // fallback that decodes the file as UTF-8 whatever was asked for.
+        // GetEncodingIndex keeps the bounds check and resolves a code page to its row.
+        const char* encodingName =
+            NSUnicodeConverter::Encodings[NSUnicodeConverter::GetEncodingIndex(IdxEncoding)].Name;
+        unicode_content = conv.toUnicode(file_data.get(), read_size, encodingName);
 
         utf8_content = conv.fromUnicode(unicode_content, "UTF-8");
     }
@@ -192,15 +193,12 @@ const std::vector<std::wstring> TxtFile::readUnicodeLines(int CodePage)
     {
 
         NSUnicodeConverter::CUnicodeConverter conv;
-        if (CodePage >= 0 && CodePage < UNICODE_CONVERTER_ENCODINGS_COUNT)
-        {
-            const char* encodingName = NSUnicodeConverter::Encodings[CodePage].Name;
-            content = conv.toUnicode(file_data, read_size, encodingName);
-        }
-        else
-        {
-            content = conv.toUnicode(file_data, read_size, 46);
-        }
+        // #1359: as in readUtf8Lines above.  The old fallback here was worse than that
+        // one: 46 is the table's row for UTF-8, but it was passed to the overload that
+        // takes a *code page*, where 46 is not UTF-8 and not anything else either.
+        const char* encodingName =
+            NSUnicodeConverter::Encodings[NSUnicodeConverter::GetEncodingIndex(CodePage)].Name;
+        content = conv.toUnicode(file_data, read_size, encodingName);
     }
     delete [] file_data;
     size_t lineCount = 0;

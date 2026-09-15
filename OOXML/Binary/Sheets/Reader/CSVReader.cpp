@@ -316,7 +316,22 @@ _UINT32 CSVReader::Impl::Read(const std::wstring &sFileName, OOX::Spreadsheet::C
 	{
 		wcDelimiterLeading = sFileDataW[4];
 		nDelimiterSize = 1;
-		if (2 == sizeof(wchar_t) && 0xD800 <= wcDelimiterLeading && wcDelimiterLeading <= 0xDBFF &&( sFileDataW[5] != L'\r' || sFileDataW[5] != L'\n'))
+		// The trailing half of a surrogate pair is only taken when there really is one.
+		// The test used to read `sFileDataW[5] != L'\r' || sFileDataW[5] != L'\n'`, which
+		// is true for every possible character - one char cannot be both - so it added
+		// nothing to the surrogate range check in front of it.  It was meant to say "and
+		// [5] is not a line break", i.e. `&&`.
+		//
+		// A well-formed pair cannot have a line break in its second half, but a file whose
+		// "sep=" line carries a LONE high surrogate followed by CR or LF can.  With the
+		// tautology that CR/LF became wcDelimiterTrailing and nDelimiterSize became 2, so
+		// the loop below (line 379) then split a cell at every <surrogate, CR/LF> pair in
+		// the data and skipped nDelimiterSize characters past it - eating the row break
+		// and merging two rows.  The "sep=" line itself is consumed identically either way.
+		//
+		// Windows only: the whole branch is behind 2 == sizeof(wchar_t), and wchar_t is
+		// 4 bytes on macOS and Linux.
+		if (2 == sizeof(wchar_t) && 0xD800 <= wcDelimiterLeading && wcDelimiterLeading <= 0xDBFF && (sFileDataW[5] != L'\r' && sFileDataW[5] != L'\n'))
 		{
 			wcDelimiterTrailing = sFileDataW[5];
 			nDelimiterSize = 2;
