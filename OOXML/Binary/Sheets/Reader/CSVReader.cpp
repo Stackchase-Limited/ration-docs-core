@@ -394,7 +394,16 @@ _UINT32 CSVReader::Impl::Read(const std::wstring &sFileName, OOX::Spreadsheet::C
 			{
 				nStartCell = 0;
 				sFileDataW.erase(0, nIndex + nDelimiterSize);
-				nSize -= (nIndex + nDelimiterSize); nIndex = 0;
+				nSize -= (nIndex + nDelimiterSize);
+				/* #1297: the erase has just moved an unexamined character to index 0,
+				   but the loop's own ++nIndex runs immediately after this block - so
+				   setting nIndex to 0 here made the parse resume at index 1 and skip
+				   that character entirely. When it was a delimiter, a quote, a tab or
+				   a newline it silently lost its meaning and the text on either side
+				   of it was merged into one cell. Compaction fires once per 500000
+				   characters, so every CSV of a few megabytes was corrupted several
+				   times over. Step back one, so the increment lands on index 0. */
+				nIndex = (size_t)-1;
 				pTemp = sFileDataW.c_str();
 			}
 			else
@@ -429,7 +438,11 @@ _UINT32 CSVReader::Impl::Read(const std::wstring &sFileName, OOX::Spreadsheet::C
 			{
 				nStartCell = 0;
 				sFileDataW.erase(0, nIndex + 1);
-				nSize -= (nIndex + 1); nIndex = 0;
+				nSize -= (nIndex + 1);
+				/* #1297: see the delimiter branch above - the first character of the
+				   compacted buffer has not been examined yet, and the loop's ++nIndex
+				   would step straight over it. */
+				nIndex = (size_t)-1;
 				pTemp = sFileDataW.c_str();
 			}
 			else
