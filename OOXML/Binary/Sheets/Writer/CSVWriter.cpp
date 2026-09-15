@@ -949,7 +949,13 @@ void CSVWriter::Impl::WriteRowEnd(OOX::Spreadsheet::CRow* pWorksheet, bool bLast
 		WriteFile(&m_oFile, &m_pWriteBuffer, m_nCurrentIndex, g_sEndJson, m_nCodePage);
 	else
 	{
-		while (m_nColDimension > m_nColCurrent && !bLast) // todo - write dimension in binary - and take data from there
+		// Every row in the used range is padded out to the same number of
+		// fields, the last one included. Excel writes the trailing empty cells
+		// as delimiters, and a reader that counts fields per line - which is
+		// most of them - silently drops the final row's last columns if they
+		// are missing. #2022.
+		(void)bLast;
+		while (m_nColDimension > m_nColCurrent) // todo - write dimension in binary - and take data from there
 		{
 			// Write delimiter
 			++m_nColCurrent;
@@ -1087,6 +1093,44 @@ void CSVWriter::Impl::GetDefaultFormatCode(int numFmt, std::wstring & format_cod
 		if (numFmt == 81)					format_type = SimpleTypes::Spreadsheet::celltypeDate;
 	}
 }
+//---------------------------------------------------------------------------------------------------------------------------------
+// The literal run-in and run-out of a number format section is not plain text.
+// Besides quoted runs and backslash escapes it carries two column-padding
+// directives - `_c` reserves the width of c, `*c` repeats c until the column is
+// full - and bracketed directives such as [Red], [<100] or [$-409].  None of
+// them is a character to print, and a CSV has no columns for the padding ones
+// to act on, so all three are dropped and the escapes are resolved.  Left alone
+// they were copied into the output verbatim: the Accounting format
+// `_ * #,##0.00_ ;...` wrote the cell as `_ * 8745.00_ `.
+static std::wstring numfmt_literal(const std::wstring & text)
+{
+	std::wstring result;
+	result.reserve(text.length());
+
+	for (size_t i = 0; i < text.length(); ++i)
+	{
+		wchar_t c = text[i];
+
+		if (L'\\' == c)			// \c - c itself, whatever it is
+		{
+			if (i + 1 < text.length())
+				result += text[++i];
+		}
+		else if (L'_' == c || L'*' == c)	// _c reserves c's width, *c fills with c
+		{
+			if (i + 1 < text.length())
+				++i;
+		}
+		else if (L'[' == c)		// [Red], [<100], [$-409] - not text
+		{
+			size_t close = text.find(L']', i);
+			i = (std::wstring::npos == close) ? text.length() : close;
+		}
+		else
+			result += c;
+	}
+	return result;
+}
 std::wstring CSVWriter::Impl::ConvertValueCellToString(const std::wstring &value, boost::optional<int> format_type, std::wstring format_code)
 {
 	if (false == format_code.empty())
@@ -1172,8 +1216,7 @@ std::wstring CSVWriter::Impl::ConvertValueCellToString(const std::wstring &value
 					numberFormat.bPercent = true;
 				}
 
-				std::wstring strStart = format_code.substr(0, pos_start);
-				XmlUtils::replace_all(strStart, L"\\", L"");
+				std::wstring strStart = numfmt_literal(format_code.substr(0, pos_start));
 
 				format_string = strStart;
 				format_string += L"% 0"; //padding
@@ -1188,8 +1231,7 @@ std::wstring CSVWriter::Impl::ConvertValueCellToString(const std::wstring &value
 					format_string += L".";
 					format_string += std::to_wstring(numberFormat.count_float);
 				}
-				std::wstring strEnd = format_code.substr(pos_end + 1);
-				XmlUtils::replace_all(strEnd, L"\\", L"");
+				std::wstring strEnd = numfmt_literal(format_code.substr(pos_end + 1));
 				
 				format_string += numberFormat.bFloat ? L"f" : L"ld";
 				if (numberFormat.bPercent)
