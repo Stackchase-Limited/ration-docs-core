@@ -708,7 +708,10 @@ void WriteFile(NSFile::CFileBinary *pFile, wchar_t **pWriteBuffer, int &nCurrent
 		}
 		else
 		{
-			const NSUnicodeConverter::EncodindId& oEncodindId = NSUnicodeConverter::Encodings[nCodePage];
+			// #1359: the export side takes its code page from the same caller-supplied
+			// <m_nCsvTxtEncoding> as the import side, so it can be out of range too.
+			const NSUnicodeConverter::EncodindId& oEncodindId =
+				NSUnicodeConverter::Encodings[NSUnicodeConverter::GetEncodingIndex(nCodePage)];
 			NSUnicodeConverter::CUnicodeConverter oUnicodeConverter;
 			std::string sFileDataA = oUnicodeConverter.fromUnicode(*pWriteBuffer, nCurrentIndex, oEncodindId.Name);
 			pFile->WriteFile((BYTE*)sFileDataA.c_str(), (DWORD)sFileDataA.length());

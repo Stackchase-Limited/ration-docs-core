@@ -127,6 +127,40 @@ namespace NSUnicodeConverter
         { 53,   54936,   "GB18030",         "Chinese government standard" }
     };
 
+    // Encodings is subscripted directly by the CSV and TXT readers and writers with a
+    // number that arrives from outside the process: x2t's <m_nCsvTxtEncoding>, which the
+    // editor fills in from asc_setAdvancedOptions.  The two sides disagree about what
+    // that number is.  This table wants its own Index column (UTF-16LE is 48), but the
+    // editor API documents a *Windows code page* - sdkjs/cell/api.js:1273 gives
+    // "new Asc.asc_CTextOptions(1200, c_oAscCsvDelimiter.Comma)" as the example - so
+    // values far outside 0..53 really do reach the subscript.
+    //
+    // Reading past the end of the table yields an EncodindId assembled from whatever
+    // follows it, and its Name is then handed to ICU as a const char*.  Measured on the
+    // shipped x2t (#1359): 65000 and 65001 crash the converter outright (SIGSEGV inside
+    // ucnv_loadSharedData, no output file, so the editor shows "Something has gone
+    // wrong"), while 1200, 1201, 1251, 1252, 12000, 28591, 932, 936 and every index from
+    // 54 up return success with an EMPTY spreadsheet - the whole file silently lost.
+    //
+    // So normalise before subscripting: pass through a real index, translate a Windows
+    // code page to its index (which makes the documented API value work), and fall back
+    // to UTF-8 for anything else.  A wrong encoding is recoverable; a dead converter and
+    // a blank sheet are not.
+    static const int UNICODE_CONVERTER_ENCODING_UTF8 = 46; // Encodings[46], WindowsCodePage 65001
+
+    static inline int GetEncodingIndex(long long nCodePage)
+    {
+        if (0 <= nCodePage && nCodePage < UNICODE_CONVERTER_ENCODINGS_COUNT)
+            return (int)nCodePage;
+
+        for (int i = 0; i < UNICODE_CONVERTER_ENCODINGS_COUNT; ++i)
+        {
+            if ((long long)Encodings[i].WindowsCodePage == nCodePage)
+                return i;
+        }
+        return UNICODE_CONVERTER_ENCODING_UTF8;
+    }
+
     static std::map<int, std::string> create_mapEncodingsICU()
     {
         std::map<int, std::string> m;

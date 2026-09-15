@@ -280,7 +280,12 @@ _UINT32 CSVReader::Impl::Read(const std::wstring &sFileName, OOX::Spreadsheet::C
 	}
 	else
 	{
-		const NSUnicodeConverter::EncodindId& oEncodindId = NSUnicodeConverter::Encodings[nCodePage];
+		// #1359: nCodePage is the caller's <m_nCsvTxtEncoding> and is NOT guaranteed to be
+		// a valid index into Encodings - the editor API documents a Windows code page here.
+		// Subscripting the table with it crashed x2t on 65000/65001 and returned an empty
+		// sheet for 1200, 1251, 1252 ... See GetEncodingIndex in UnicodeConverter_Encodings.h.
+		const NSUnicodeConverter::EncodindId& oEncodindId =
+			NSUnicodeConverter::Encodings[NSUnicodeConverter::GetEncodingIndex(nCodePage)];
 
 		NSUnicodeConverter::CUnicodeConverter oUnicodeConverter;
 		sFileDataW = oUnicodeConverter.toUnicode((const char*)pInputBuffer, nInputBufferSize, oEncodindId.Name);
@@ -292,7 +297,10 @@ _UINT32 CSVReader::Impl::Read(const std::wstring &sFileName, OOX::Spreadsheet::C
 
 	if (nSize < 1 && nInputBufferSize > 0)
 	{//for synchronization of preview and normal result output
-		const NSUnicodeConverter::EncodindId& oEncodindId = NSUnicodeConverter::Encodings[nCodePage];
+		// #1359: same unchecked subscript as above - and this one is reached with the
+		// 1000 "ansi" sentinel too, which is not a table index at all.
+		const NSUnicodeConverter::EncodindId& oEncodindId =
+			NSUnicodeConverter::Encodings[NSUnicodeConverter::GetEncodingIndex(nCodePage)];
 
 		NSUnicodeConverter::CUnicodeConverter oUnicodeConverter;
 		sFileDataW = oUnicodeConverter.toUnicode((const char*)pInputBuffer, nInputBufferSize, oEncodindId.Name);
