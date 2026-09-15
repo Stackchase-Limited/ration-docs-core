@@ -375,6 +375,18 @@ void ods_conversion_context::start_pivot_table(const std::wstring &name)
 {
 	return table_context_.start_pivot_table(name);
 }
+void ods_conversion_context::set_pivot_table_target_range(const std::wstring &oox_ref)
+{
+	table_context_.set_pivot_table_target_range(oox_ref);
+}
+void ods_conversion_context::set_pivot_table_source_range(const std::wstring &oox_sheet, const std::wstring &oox_ref)
+{
+	table_context_.set_pivot_table_source_range(oox_sheet, oox_ref);
+}
+void ods_conversion_context::add_pivot_table_field(const std::wstring &source_field_name, int orientation, int function)
+{
+	table_context_.add_pivot_table_field(source_field_name, orientation, function);
+}
 void ods_conversion_context::end_pivot_table()
 {
 	table_context_.end_pivot_table();

@@ -226,6 +226,99 @@ void ods_table_context::start_pivot_table(const std::wstring &name)
 
 	state()->start_pilot_table(elm);
 }
+namespace
+{
+	// An ODF cell-range-address is built out of an OOX-style reference, and the
+	// sheet name has to survive that trip. Excel quotes a sheet name that is not
+	// a bare identifier ('Q1 Sales'!A1:B5); unquoted, the formula converter would
+	// read the space as the end of the name.
+	std::wstring quote_sheet_name_if_needed(const std::wstring & name)
+	{
+		bool bNeedsQuotes = name.empty();
+		for (size_t i = 0; false == bNeedsQuotes && i < name.length(); ++i)
+		{
+			wchar_t c = name[i];
+			bNeedsQuotes = !(iswalnum(c) || c == L'_' || c == L'.');
+		}
+		if (false == bNeedsQuotes) return name;
+
+		std::wstring escaped = name;
+		XmlUtils::replace_all(escaped, L"'", L"''");
+		return L"'" + escaped + L"'";
+	}
+
+	std::wstring oox_ref_to_odf_address(const std::wstring & sheet, const std::wstring & oox_ref)
+	{
+		if (oox_ref.empty()) return L"";
+
+		std::wstring qualified = oox_ref;
+		if (false == sheet.empty())
+			qualified = quote_sheet_name_if_needed(sheet) + L"!" + oox_ref;
+
+		formulasconvert::oox2odf_converter formulas_converter;
+		std::wstring odf_range = formulas_converter.convert_named_ref(qualified);
+
+		XmlUtils::replace_all(odf_range, L"[", L"");
+		XmlUtils::replace_all(odf_range, L"]", L"");
+
+		return odf_range;
+	}
+}
+void ods_table_context::set_pivot_table_target_range(const std::wstring & oox_ref)
+{
+	// The target range says where the pivot sits. Without it a reader has a
+	// field list and nowhere to draw it, so the table degrades to plain cells.
+	table_data_pilot_table *pilot_table = dynamic_cast<table_data_pilot_table*>(state()->pilot_table_state_.elm.get());
+	if (!pilot_table) return;
+
+	std::wstring odf_range = oox_ref_to_odf_address(state()->office_table_name_, oox_ref);
+	if (odf_range.empty()) return;
+
+	pilot_table->table_target_range_address_ = odf_range;
+}
+void ods_table_context::set_pivot_table_source_range(const std::wstring & oox_sheet, const std::wstring & oox_ref)
+{
+	// The source range is what the pivot is computed from. An ODF pivot with no
+	// source has nothing to recalculate against and is inert on reopening.
+	table_data_pilot_table *pilot_table = dynamic_cast<table_data_pilot_table*>(state()->pilot_table_state_.elm.get());
+	if (!pilot_table) return;
+
+	std::wstring odf_range = oox_ref_to_odf_address(oox_sheet, oox_ref);
+	if (odf_range.empty()) return;
+
+	office_element_ptr elm;
+	create_element(L"table", L"source-cell-range", elm, &context_);
+
+	table_source_cell_range *source = dynamic_cast<table_source_cell_range*>(elm.get());
+	if (!source) return;
+
+	source->table_cell_range_address_ = odf_range;
+
+	pilot_table->add_child_element(elm);
+}
+void ods_table_context::add_pivot_table_field(const std::wstring & source_field_name, int orientation, int function)
+{
+	// One table:data-pilot-field per field the pivot uses, carrying the
+	// orientation - row, column, data or page - that makes it a pivot at all.
+	if (source_field_name.empty()) return;
+
+	table_data_pilot_table *pilot_table = dynamic_cast<table_data_pilot_table*>(state()->pilot_table_state_.elm.get());
+	if (!pilot_table) return;
+
+	office_element_ptr elm;
+	create_element(L"table", L"data-pilot-field", elm, &context_);
+
+	table_data_pilot_field *field = dynamic_cast<table_data_pilot_field*>(elm.get());
+	if (!field) return;
+
+	field->table_source_field_name_ = source_field_name;
+	field->table_orientation_ = odf_types::table_orientation((odf_types::table_orientation::type)orientation);
+
+	if (function >= 0)
+		field->table_function_ = odf_types::table_function((odf_types::table_function::type)function);
+
+	pilot_table->add_child_element(elm);
+}
 void ods_table_context::end_pivot_table()
 {
 	state()->end_pilot_table();

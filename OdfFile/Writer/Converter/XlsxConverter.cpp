@@ -74,6 +74,9 @@
 #include "../Format/style_graphic_properties.h"
 #include "../Format/style_page_layout_properties.h"
 
+#include "../../DataTypes/tableorientation.h"
+#include "../../DataTypes/tablefunction.h"
+
 #include "../../Common/utils.h"
 
 using namespace cpdoccore;
@@ -564,46 +567,117 @@ void XlsxConverter::convert(OOX::Spreadsheet::CPivotTableFile *oox_pivot_table)
 		convert(oox_pivot_table->m_oPivotTableDefinition.GetPointer(), oPivotCache->m_oPivotCashDefinition.GetPointer());
 	}
 }
+// ODF names a pivot field's role; OOX splits the same information between the
+// field's axis attribute and the separate dataFields list. Neither enum's
+// numeric values are safe to reinterpret as the other's, so both directions are
+// spelled out.
+static int odf_orientation_from_oox_axis(SimpleTypes::Spreadsheet::EPivotAxisType axis)
+{
+	switch (axis)
+	{
+	case SimpleTypes::Spreadsheet::axisRow:		return odf_types::table_orientation::row;
+	case SimpleTypes::Spreadsheet::axisCol:		return odf_types::table_orientation::column;
+	case SimpleTypes::Spreadsheet::axisPage:	return odf_types::table_orientation::page;
+	case SimpleTypes::Spreadsheet::axisValues:	return odf_types::table_orientation::data;
+	default:									return odf_types::table_orientation::hidden;
+	}
+}
+static int odf_function_from_oox_subtotal(SimpleTypes::Spreadsheet::EDataConsolidateFunction function)
+{
+	switch (function)
+	{
+	case SimpleTypes::Spreadsheet::functionAverage:		return odf_types::table_function::average;
+	case SimpleTypes::Spreadsheet::functionCount:		return odf_types::table_function::count;
+	case SimpleTypes::Spreadsheet::functionCountNums:	return odf_types::table_function::countnums;
+	case SimpleTypes::Spreadsheet::functionMaximum:		return odf_types::table_function::max;
+	case SimpleTypes::Spreadsheet::functionMinimum:		return odf_types::table_function::min;
+	case SimpleTypes::Spreadsheet::functionProduct:		return odf_types::table_function::product;
+	case SimpleTypes::Spreadsheet::functionStdDev:		return odf_types::table_function::stdev;
+	case SimpleTypes::Spreadsheet::functionStdDevP:		return odf_types::table_function::stdevp;
+	case SimpleTypes::Spreadsheet::functionVariance:	return odf_types::table_function::var;
+	case SimpleTypes::Spreadsheet::functionVarP:		return odf_types::table_function::varp;
+	case SimpleTypes::Spreadsheet::functionSum:
+	default:											return odf_types::table_function::sum;
+	}
+}
 void XlsxConverter::convert(OOX::Spreadsheet::CPivotTableDefinition *oox_pivot_table, OOX::Spreadsheet::CPivotCacheDefinition* oox_pivot_cache)
 {
 	if (!oox_pivot_table || !oox_pivot_cache) return;
 
 	ods_context->start_pivot_table(oox_pivot_table->m_oName.IsInit() ? *oox_pivot_table->m_oName : L"");
 
-	convert(oox_pivot_table->m_oLocation.GetPointer());
-	if (oox_pivot_table->m_oPivotFields.IsInit())
+	// Where the pivot is drawn.
+	if (oox_pivot_table->m_oLocation.IsInit() && oox_pivot_table->m_oLocation->m_oRef.IsInit())
 	{
-		for (size_t i = 0; i < oox_pivot_table->m_oPivotFields->m_arrItems.size(); i++)
+		ods_context->set_pivot_table_target_range(*oox_pivot_table->m_oLocation->m_oRef);
+	}
+
+	// What it is computed from. ODF keeps this on the pivot itself; OOX keeps it
+	// one part away, on the cache definition.
+	if (oox_pivot_cache->m_oCacheSource.IsInit() && oox_pivot_cache->m_oCacheSource->m_oWorksheetSource.IsInit())
+	{
+		OOX::Spreadsheet::CWorksheetSource *source = oox_pivot_cache->m_oCacheSource->m_oWorksheetSource.GetPointer();
+
+		if (source->m_oRef.IsInit())
 		{
-			convert(oox_pivot_table->m_oPivotFields->m_arrItems[i]);
+			ods_context->set_pivot_table_source_range(source->m_oSheet.IsInit() ? *source->m_oSheet : L"", *source->m_oRef);
 		}
 	}
-	//if (oox_pivot_table->m_oDataFields.IsInit())
-	//{
-	//	for (size_t i = 0; i < oox_pivot_table->m_oDataFields->m_arrItems.size(); i++)
-	//	{
-	//		convert(oox_pivot_table->m_oDataFields->m_arrItems[i]);
-	//	}
-	//}
-	//if (oox_pivot_table->m_oColFields.IsInit())
-	//{
-	//	for (size_t i = 0; i < oox_pivot_table->m_oColFields->m_arrItems.size(); i++)
-	//	{
-	//		convert(oox_pivot_table->m_oColFields->m_arrItems[i]);
-	//	}
-	//}
-	//if (oox_pivot_table->m_oRowFields.IsInit())
-	//{
-	//	for (size_t i = 0; i < oox_pivot_table->m_oRowFields->m_arrItems.size(); i++)
-	//	{
-	//		convert(oox_pivot_table->m_oRowFields->m_arrItems[i]);
-	//	}
-	//}
-	if (oox_pivot_table->m_oPageFields.IsInit())
+
+	// A pivot field is identified in ODF by the *source* field's name, which
+	// lives only in the cache. Without these names there is nothing to attach an
+	// orientation to.
+	std::vector<std::wstring> arCacheFieldNames;
+	if (oox_pivot_cache->m_oCacheFields.IsInit())
 	{
-		for (size_t i = 0; i < oox_pivot_table->m_oPageFields->m_arrItems.size(); i++)
+		for (size_t i = 0; i < oox_pivot_cache->m_oCacheFields->m_arrItems.size(); i++)
 		{
-			convert(oox_pivot_table->m_oPageFields->m_arrItems[i]);
+			OOX::Spreadsheet::CPivotCacheField *cache_field = oox_pivot_cache->m_oCacheFields->m_arrItems[i];
+
+			arCacheFieldNames.push_back((cache_field && cache_field->m_oName.IsInit()) ? *cache_field->m_oName : L"");
+		}
+	}
+
+	// Row, column and page fields. A field marked only as a data field is left
+	// to the dataFields pass below, which is the one that knows its function.
+	if (oox_pivot_table->m_oPivotFields.IsInit())
+	{
+		for (size_t i = 0; i < oox_pivot_table->m_oPivotFields->m_arrItems.size() && i < arCacheFieldNames.size(); i++)
+		{
+			OOX::Spreadsheet::CPivotField *pivot_field = oox_pivot_table->m_oPivotFields->m_arrItems[i];
+			if (!pivot_field) continue;
+
+			if (false == pivot_field->m_oAxis.IsInit()) continue;
+
+			// axisValues is the "Values" placeholder, not a field to aggregate.
+			// The dataFields pass below is the only one that knows which function
+			// to apply, so emitting it here too would duplicate the field with no
+			// function attached.
+			if (SimpleTypes::Spreadsheet::axisValues == pivot_field->m_oAxis->GetValue()) continue;
+
+			ods_context->add_pivot_table_field(arCacheFieldNames[i],
+				odf_orientation_from_oox_axis(pivot_field->m_oAxis->GetValue()), -1);
+		}
+	}
+
+	// The data fields - the summed or counted values. This is the part that was
+	// never written, and a pivot without it has nothing to aggregate.
+	if (oox_pivot_table->m_oDataFields.IsInit())
+	{
+		for (size_t i = 0; i < oox_pivot_table->m_oDataFields->m_arrItems.size(); i++)
+		{
+			OOX::Spreadsheet::CDataField *data_field = oox_pivot_table->m_oDataFields->m_arrItems[i];
+			if (!data_field || false == data_field->m_oFld.IsInit()) continue;
+
+			size_t nField = (size_t)data_field->m_oFld->GetValue();
+			if (nField >= arCacheFieldNames.size()) continue;
+
+			// OOX omits subtotal when it is the default, which is sum.
+			int nFunction = data_field->m_oSubtotal.IsInit()
+				? odf_function_from_oox_subtotal(data_field->m_oSubtotal->GetValue())
+				: (int)odf_types::table_function::sum;
+
+			ods_context->add_pivot_table_field(arCacheFieldNames[nField], odf_types::table_orientation::data, nFunction);
 		}
 	}
 

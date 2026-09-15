@@ -85,6 +85,9 @@ public:
 	void end_data_validation();
 
 	void start_pivot_table(const std::wstring &name);
+		void set_pivot_table_target_range(const std::wstring &oox_ref);
+		void set_pivot_table_source_range(const std::wstring &oox_sheet, const std::wstring &oox_ref);
+		void add_pivot_table_field(const std::wstring &source_field_name, int orientation, int function);
 	void end_pivot_table();
 private:
 
