@@ -71,7 +71,13 @@ namespace PPTX
 				pWriter->WriteAttribute(L"id", id.IsInit() ? *id : std::to_wstring(*idx));
 			}
 			pWriter->WriteAttribute2(L"name", name);
-			pWriter->WriteAttribute(L"initials", initials);
+			// initials is author-supplied text just like name, so it needs the
+			// escaping form too. Written raw, an author whose initials contain
+			// '&' or '<' - or a control character - produced a commentAuthors
+			// part that does not parse, and every comment author in the
+			// presentation was lost on reopen. Same defect as the <a:t> run text
+			// in ONLYOFFICE/DesktopEditors#139, one part over.
+			pWriter->WriteAttribute2(L"initials", initials);
 			if (last_idx.IsInit())
 			{
 				pWriter->WriteAttribute(L"lastIdx", last_idx);

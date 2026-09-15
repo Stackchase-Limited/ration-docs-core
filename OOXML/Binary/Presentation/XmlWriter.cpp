@@ -75,13 +75,24 @@ void CXmlWriter::WriteString(const std::wstring& strValue)
 }
 void CXmlWriter::WriteStringXML(std::wstring strValue)
 {
-	std::wstring s = strValue;
-	XmlUtils::replace_all( s, L"&",	L"&amp;");
-	XmlUtils::replace_all( s, L"'",	L"&apos;");
-	XmlUtils::replace_all( s, L"<",	L"&lt;");
-	XmlUtils::replace_all( s, L">",	L"&gt;");
-	XmlUtils::replace_all( s, L"\"",	L"&quot;");
-	m_oWriter.WriteString(s);
+	// Escaping the five predefined entities is not enough: the text also has to be
+	// stripped of characters that no XML 1.0 document may contain at all - the C0
+	// controls other than tab/LF/CR, U+FFFE/U+FFFF, and unpaired surrogates. They
+	// have no entity form either, so the only thing a writer can do is drop them.
+	//
+	// This is the run text of every <a:t>, so writing one of those raw produced a
+	// slide part that no conformant parser will accept. Our own reader then fails
+	// the whole part and the slide comes back EMPTY - every run on it, not just the
+	// offending character - which is the data loss reported as
+	// ONLYOFFICE/DesktopEditors#139 ("some unicode characters make content
+	// disappear after save/close/open"). MS PowerPoint offers to repair the file.
+	//
+	// XmlUtils::EncodeXmlString escapes the same five entities and substitutes a
+	// space for anything illegal. It is what the DOCX run-text writer
+	// (Binary_DocumentTableReader::ReadRunContent) already uses, and what the
+	// cNvPr name/descr/title attributes a few frames up this same call stack
+	// already use, so this brings run text in line with its own neighbours.
+	m_oWriter.WriteString(XmlUtils::EncodeXmlString(strValue));
 }
 void CXmlWriter::WriteDouble(const double& val)
 {
