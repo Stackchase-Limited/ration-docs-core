@@ -374,8 +374,33 @@ core_linux {
 }
 
 core_linux {
-	equals(TEMPLATE, app):CONFIG += core_static_link_libstd
-	plugin:CONFIG += core_static_link_libstd
+	# Static libstdc++ is opt-in on Linux now; it used to be added to every app and
+	# plugin target here.
+	#
+	# On a *shared library* it is actively wrong. The libstdc++.a members that get
+	# pulled in reference the runtime's private statics - _S_refcount, _S_classic,
+	# _S_categories, _S_facet_categories, _S_synced_with_stdio - and the members
+	# defining them do not come along, so the library ships with them undefined.
+	# libstdc++.so.6 does not export private statics either, so nothing can satisfy
+	# them at load time and the application stops before it reaches main():
+	#   ./DesktopEditors: symbol lookup error: .../libascdocumentscore.so:
+	#   undefined symbol: _ZNSt8ios_base4Init20_S_synced_with_stdioE
+	# `ldd -r` on the payload lists eight of them. Nothing in that message suggests
+	# a link flag.
+	#
+	# Even when it does link cleanly, a statically linked libstdc++ in the
+	# executable plus a dynamic one in the libraries it loads gives one process two
+	# copies of the C++ runtime: two ios_base::Init counters, two locale tables.
+	#
+	# TRADE-OFF, stated rather than buried: the binaries now need the host's
+	# libstdc++ to be at least as new as the build host's. That is what distro
+	# packages do; reaching older distros means building in an older container,
+	# not linking the runtime in twice. CONFIG += core_linux_static_libstd puts it
+	# back for anyone who wants the old behaviour.
+	core_linux_static_libstd {
+		equals(TEMPLATE, app):CONFIG += core_static_link_libstd
+		plugin:CONFIG += core_static_link_libstd
+	}
 
 
 	equals(TEMPLATE, app):QMAKE_LFLAGS_RELEASE += -Wl,-s
