@@ -30,7 +30,15 @@ HEAD = open("HEAD", "r")
 last_stable_commit = HEAD.read().split('\n')[0]  # workaround to delete \n in the end of the line
 HEAD.close()
 
-if not base.is_dir("hunspell"):
+# Checked on the clone's .git/HEAD rather than on the directory existing, because
+# the next statement reads exactly that file. A clone that was interrupted - or a
+# tree where the sources were copied without .git - leaves the directory in place,
+# so the fetch is skipped and the build dies on the version check instead:
+#   FileNotFoundError: [Errno 2] No such file or directory: 'hunspell/.git/HEAD'
+# which reads as a missing file rather than as an incomplete checkout.
+if not base.is_file("hunspell/.git/HEAD"):
+    if base.is_dir("hunspell"):
+        base.delete_dir("hunspell")
     get_hunspell(last_stable_commit)
 
 # version check
