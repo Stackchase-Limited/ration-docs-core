@@ -43,15 +43,23 @@
 
 namespace NSSystemUtils
 {
+	/* These defaults end up in the files users save: x2t writes them into
+	   docProps/app.xml as <Application> and <Company>. The desktop shell overrides
+	   them through the APPLICATION_NAME/COMPANY_NAME environment variables
+	   (desktop-sdk sets both from converter_application_name), so a document saved
+	   from the application is already correct - but x2t invoked directly, which is
+	   a supported way to use it, fell back to these and stamped somebody else's
+	   name into the output. Changed at the source of the fallback so it is right
+	   however the converter is reached. */
 	static const wchar_t* gc_EnvApplicationName = L"APPLICATION_NAME";
 #ifndef APPLICATION_NAME_DEFAULT
-	static const wchar_t* gc_EnvApplicationNameDefault = L"ONLYOFFICE";
+	static const wchar_t* gc_EnvApplicationNameDefault = L"Ration Docs";
 #else
 	static const wchar_t* gc_EnvApplicationNameDefault = VALUE_TO_STR(APPLICATION_NAME_DEFAULT);
 #endif
 	static const wchar_t* gc_EnvCompanyName = L"COMPANY_NAME";
 #ifndef COMPANY_NAME_DEFAULT
-	static const wchar_t* gc_EnvCompanyNameDefault = L"Ascensio System SIA Copyright (c) 2022";
+	static const wchar_t* gc_EnvCompanyNameDefault = L"Stackchase Limited";
 #else
 	static const wchar_t* gc_EnvCompanyNameDefault = VALUE_TO_STR(COMPANY_NAME_DEFAULT);
 #endif
