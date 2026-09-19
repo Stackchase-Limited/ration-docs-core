@@ -1,26 +1,42 @@
+# Ration Docs - core
 
-[![License](https://img.shields.io/badge/License-GNU%20AGPL%20V3-green.svg?style=flat)](https://www.gnu.org/licenses/agpl-3.0.en.html)     ![x2tconverter](https://img.shields.io/badge/x2tconverter-v2.0.2.376-blue.svg?style=flat) ![Platforms Windows | OS X | Linux](https://img.shields.io/badge/Platforms-Windows%20%7C%20OS%20X%20%7C%20Linux%20-lightgray.svg?style=flat)
+The C++ document core: reading and writing every file format the suite supports, the `x2t` converter that moves documents between them, and the spell engine.
 
-## Core
-Server core components which are a part of [ONLYOFFICE Document Server][2] and [ONLYOFFICE Desktop Editors][4]. Enable the conversion between the most popular office document formats: DOC, DOCX, ODT, RTF, TXT, PDF, HTML, EPUB, XPS, DjVu, XLS, XLSX, ODS, CSV, PPT, PPTX, ODP.
+Part of **[Ration Docs Desktop](https://github.com/Stackchase-Limited/ration-docs-desktop)**, an offline office suite maintained by Stackchase Limited. This repository is a modified version of [ONLYOFFICE/core](https://github.com/ONLYOFFICE/core), originally developed by Ascensio System SIA, forked at release 9.4.0.
 
-## Project Information
+## What lives here
 
-Official website: [http://www.onlyoffice.com](http://onlyoffice.com "http://www.onlyoffice.com")
+Format readers and writers (OOXML, ODF, the binary Microsoft formats, PDF, DjVu,
+EPUB and the rest), the conversion pipeline, the graphics and font stack, and
+`DesktopEditor/doctrenderer`, which runs the editor JavaScript under v8 for
+headless conversion.
 
-Code repository: [https://github.com/ONLYOFFICE/core](https://github.com/ONLYOFFICE/core "https://github.com/ONLYOFFICE/core")
+Most data-loss and file-corruption bugs are fixed here.
 
-SaaS version: [https://www.onlyoffice.com/cloud-office.aspx](https://www.onlyoffice.com/cloud-office.aspx "https://www.onlyoffice.com/cloud-office.aspx")
+## Building
 
-## User Feedback and Support
+This repository is not built on its own. It is one submodule of the suite, and
+`build_tools` drives the whole build:
 
-If you have any problems with or questions about [ONLYOFFICE Document Server][2], please visit our official forum to find answers to your questions: [forum.onlyoffice.com][1] or you can ask and answer ONLYOFFICE development questions on [Stack Overflow][3].
+    git clone --recursive https://github.com/Stackchase-Limited/ration-docs-desktop.git
+    cd ration-docs-desktop/build_tools
+    python3 configure.py --module desktop --platform linux_arm64 --qt-dir /usr
+    python3 make.py
 
-  [1]: https://forum.onlyoffice.com
-  [2]: https://github.com/ONLYOFFICE/DocumentServer
-  [3]: http://stackoverflow.com/questions/tagged/onlyoffice
-  [4]: https://github.com/ONLYOFFICE/DesktopEditors
-  
-## License
+## Licence and attribution
 
-Core is released under an GNU AGPL v3.0 license. See the LICENSE file for more information.
+Distributed under the **GNU Affero General Public License v3** together with the
+additional terms supplied with the original program; both are in `LICENSE`.
+Non-code elements - illustrations, icon sets, documentation - are **CC BY-SA 4.0**.
+
+    Copyright (C) Ascensio System SIA, 2009-2026
+    Copyright (C) Stackchase Limited, 2026
+
+This is a modified version of ONLYOFFICE software. The original was developed by
+Ascensio System SIA; modifications are by Stackchase Limited, 2026. **ONLYOFFICE is
+a trademark of Ascensio System SIA**, used here only to identify the software this
+is based on. Ration Docs is not produced by, endorsed by, or affiliated with
+Ascensio System SIA, and no trademark rights are granted by the licence.
+
+The corresponding source for a released binary is the superproject at the matching
+tag, with this repository at the commit that tag records.
